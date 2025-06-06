@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Plus, Trash2, Users, Settings, Edit } from 'lucide-react';
+import { Lock, Plus, Trash2, Users, Settings, Edit, ArrowRight } from 'lucide-react';
 import { Team, Game, TournamentSettings } from '@/pages/Index';
 import { toast } from "@/hooks/use-toast";
 import GameSettings from './GameSettings';
@@ -22,6 +21,8 @@ interface AdminPanelProps {
   tournamentSettings: TournamentSettings;
   onSettingsUpdate: (settings: TournamentSettings) => void;
   onResetTournament: () => void;
+  currentPhase: 'group' | 'quarterfinal' | 'semifinal' | 'final';
+  onPhaseChange: (phase: 'group' | 'quarterfinal' | 'semifinal' | 'final') => void;
 }
 
 const AdminPanel = ({ 
@@ -33,7 +34,9 @@ const AdminPanel = ({
   onAuthChange,
   tournamentSettings,
   onSettingsUpdate,
-  onResetTournament
+  onResetTournament,
+  currentPhase,
+  onPhaseChange
 }: AdminPanelProps) => {
   const [password, setPassword] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
@@ -173,6 +176,8 @@ const AdminPanel = ({
             phase: 'group',
             group: group,
             isRunning: false,
+            team1Score: 0,
+            team2Score: 0,
           };
 
           if (tournamentSettings.winCondition === 'sets') {
@@ -236,6 +241,204 @@ const AdminPanel = ({
     toast({
       title: "Game Stopped",
       description: "Game is no longer live",
+    });
+  };
+
+  const generateKnockoutGames = () => {
+    const groupTeams = getQualifiedTeams();
+    
+    if (groupTeams.length < 8) {
+      toast({
+        title: "Not Enough Teams",
+        description: "Need at least 8 qualified teams (top 2 from each group)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newGames: Game[] = [];
+    let gameId = Date.now();
+    const courts = getCourtNames();
+
+    // Generate Quarterfinals
+    const quarterfinalMatchups = [
+      [groupTeams[0], groupTeams[7]], // 1A vs 2D
+      [groupTeams[1], groupTeams[6]], // 1B vs 2C
+      [groupTeams[2], groupTeams[5]], // 1C vs 2B
+      [groupTeams[3], groupTeams[4]], // 1D vs 2A
+    ];
+
+    quarterfinalMatchups.forEach((matchup, index) => {
+      const courtIndex = index % courts.length;
+      
+      const newGame: Game = {
+        id: (gameId++).toString(),
+        team1: matchup[0],
+        team2: matchup[1],
+        sets: [{
+          team1Score: 0,
+          team2Score: 0,
+          isComplete: false
+        }],
+        currentSet: 0,
+        isComplete: false,
+        field: courts[courtIndex],
+        phase: 'quarterfinal',
+        isRunning: false,
+        team1Score: 0,
+        team2Score: 0,
+      };
+
+      if (tournamentSettings.winCondition === 'sets') {
+        newGame.sets = Array(tournamentSettings.numberOfSets).fill(null).map(() => ({
+          team1Score: 0,
+          team2Score: 0,
+          isComplete: false
+        }));
+      }
+
+      newGames.push(newGame);
+    });
+
+    // Generate placeholder Semifinals
+    for (let i = 0; i < 2; i++) {
+      const newGame: Game = {
+        id: (gameId++).toString(),
+        team1: { id: '', name: `QF Winner ${i * 2 + 1}`, group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
+        team2: { id: '', name: `QF Winner ${i * 2 + 2}`, group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
+        sets: [{
+          team1Score: 0,
+          team2Score: 0,
+          isComplete: false
+        }],
+        currentSet: 0,
+        isComplete: false,
+        field: courts[i % courts.length],
+        phase: 'semifinal',
+        isRunning: false,
+        team1Score: 0,
+        team2Score: 0,
+      };
+
+      if (tournamentSettings.winCondition === 'sets') {
+        newGame.sets = Array(tournamentSettings.numberOfSets).fill(null).map(() => ({
+          team1Score: 0,
+          team2Score: 0,
+          isComplete: false
+        }));
+      }
+
+      newGames.push(newGame);
+    }
+
+    // Generate placeholder Final
+    const finalGame: Game = {
+      id: (gameId++).toString(),
+      team1: { id: '', name: 'SF Winner 1', group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
+      team2: { id: '', name: 'SF Winner 2', group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
+      sets: [{
+        team1Score: 0,
+        team2Score: 0,
+        isComplete: false
+      }],
+      currentSet: 0,
+      isComplete: false,
+      field: courts[0],
+      phase: 'final',
+      isRunning: false,
+      team1Score: 0,
+      team2Score: 0,
+    };
+
+    if (tournamentSettings.winCondition === 'sets') {
+      finalGame.sets = Array(tournamentSettings.numberOfSets).fill(null).map(() => ({
+        team1Score: 0,
+        team2Score: 0,
+        isComplete: false
+      }));
+    }
+
+    newGames.push(finalGame);
+
+    onGameUpdate([...games, ...newGames]);
+    onPhaseChange('quarterfinal');
+    
+    toast({
+      title: "Knockout Stage Generated",
+      description: `Generated ${newGames.length} knockout games`,
+    });
+  };
+
+  const getQualifiedTeams = () => {
+    const groups = getGroupNames();
+    const qualifiedTeams: Team[] = [];
+
+    groups.forEach(group => {
+      const groupTeams = teams
+        .filter(team => team.group === group)
+        .sort((a, b) => {
+          if (a.wins !== b.wins) return b.wins - a.wins;
+          return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+        });
+      
+      qualifiedTeams.push(...groupTeams.slice(0, 2));
+    });
+
+    return qualifiedTeams;
+  };
+
+  const addManualGame = () => {
+    if (!selectedTeam1 || !selectedTeam2 || selectedTeam1 === selectedTeam2) {
+      toast({
+        title: "Invalid Selection",
+        description: "Please select two different teams",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const team1 = teams.find(t => t.id === selectedTeam1);
+    const team2 = teams.find(t => t.id === selectedTeam2);
+    
+    if (!team1 || !team2) return;
+
+    const courts = getCourtNames();
+    const courtIndex = games.length % courts.length;
+
+    const newGame: Game = {
+      id: Date.now().toString(),
+      team1,
+      team2,
+      sets: [{
+        team1Score: 0,
+        team2Score: 0,
+        isComplete: false
+      }],
+      currentSet: 0,
+      isComplete: false,
+      field: courts[courtIndex],
+      phase: currentPhase,
+      group: currentPhase === 'group' ? team1.group : undefined,
+      isRunning: false,
+      team1Score: 0,
+      team2Score: 0,
+    };
+
+    if (tournamentSettings.winCondition === 'sets') {
+      newGame.sets = Array(tournamentSettings.numberOfSets).fill(null).map(() => ({
+        team1Score: 0,
+        team2Score: 0,
+        isComplete: false
+      }));
+    }
+
+    onGameUpdate([...games, newGame]);
+    setSelectedTeam1('');
+    setSelectedTeam2('');
+    
+    toast({
+      title: "Game Added",
+      description: `${team1.name} vs ${team2.name} has been scheduled`,
     });
   };
 
@@ -360,6 +563,54 @@ const AdminPanel = ({
         </Card>
       </div>
 
+      {/* Manual Game Addition */}
+      <Card className="bg-white/90 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plus className="text-green-500" size={20} />
+            Add Manual Game
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4 items-end">
+            <div>
+              <Label>Team 1</Label>
+              <Select value={selectedTeam1} onValueChange={setSelectedTeam1}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Team 1" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name} (Group {team.group})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Team 2</Label>
+              <Select value={selectedTeam2} onValueChange={setSelectedTeam2}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Team 2" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name} (Group {team.group})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={addManualGame} className="bg-green-500 hover:bg-green-600">
+              <Plus size={16} className="mr-2" />
+              Add Game
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Game Management */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Running Games */}
@@ -437,6 +688,15 @@ const AdminPanel = ({
               disabled={teams.length < 4}
             >
               Generate Round Robin
+            </Button>
+            
+            <Button 
+              onClick={generateKnockoutGames} 
+              className="bg-orange-500 hover:bg-orange-600"
+              disabled={getQualifiedTeams().length < 8}
+            >
+              <ArrowRight size={16} className="mr-2" />
+              Generate Knockout Stage
             </Button>
             
             <Dialog>

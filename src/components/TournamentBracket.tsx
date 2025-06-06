@@ -42,7 +42,26 @@ const TournamentBracket = ({ teams, games, currentPhase }: TournamentBracketProp
 
   const getGameWinner = (game: Game) => {
     if (!game.isComplete) return null;
+    
+    // Check sets for winner
+    if (game.sets && game.sets.length > 1) {
+      const team1SetsWon = game.sets.filter(set => set.isComplete && set.team1Score > set.team2Score).length;
+      const team2SetsWon = game.sets.filter(set => set.isComplete && set.team2Score > set.team1Score).length;
+      return team1SetsWon > team2SetsWon ? game.team1 : game.team2;
+    }
+    
+    // Check individual game score
     return game.team1Score > game.team2Score ? game.team1 : game.team2;
+  };
+
+  const getGameScore = (game: Game, team: 'team1' | 'team2') => {
+    if (game.sets && game.sets.length > 1) {
+      return game.sets.filter(set => 
+        set.isComplete && 
+        (team === 'team1' ? set.team1Score > set.team2Score : set.team2Score > set.team1Score)
+      ).length;
+    }
+    return team === 'team1' ? game.team1Score : game.team2Score;
   };
 
   const renderGameCard = (game: Game | null, title: string, isPlaceholder = false) => {
@@ -57,20 +76,20 @@ const TournamentBracket = ({ teams, games, currentPhase }: TournamentBracketProp
           {game ? (
             <div className="space-y-2">
               <div className={`flex justify-between items-center p-2 rounded ${
-                game.isComplete && game.team1Score > game.team2Score 
+                game.isComplete && getGameWinner(game)?.id === game.team1.id
                   ? 'bg-green-100 border border-green-300' 
                   : 'bg-blue-50'
               }`}>
                 <span className="font-medium text-sm">{game.team1.name}</span>
-                <span className="font-bold">{game.team1Score}</span>
+                <span className="font-bold">{getGameScore(game, 'team1')}</span>
               </div>
               <div className={`flex justify-between items-center p-2 rounded ${
-                game.isComplete && game.team2Score > game.team1Score 
+                game.isComplete && getGameWinner(game)?.id === game.team2.id
                   ? 'bg-green-100 border border-green-300' 
                   : 'bg-orange-50'
               }`}>
                 <span className="font-medium text-sm">{game.team2.name}</span>
-                <span className="font-bold">{game.team2Score}</span>
+                <span className="font-bold">{getGameScore(game, 'team2')}</span>
               </div>
               {game.isComplete && (
                 <div className="text-center">

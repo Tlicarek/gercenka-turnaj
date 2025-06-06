@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +41,9 @@ export interface Game {
   group?: string;
   winner?: Team;
   isRunning: boolean;
+  team1Score: number;
+  team2Score: number;
+  time?: string;
 }
 
 export interface TournamentSettings {
@@ -199,6 +201,8 @@ const Index = () => {
               tournamentSettings={tournamentSettings}
               onSettingsUpdate={handleSettingsUpdate}
               onResetTournament={resetTournament}
+              currentPhase={currentPhase}
+              onPhaseChange={setCurrentPhase}
             />
           </TabsContent>
         </Tabs>

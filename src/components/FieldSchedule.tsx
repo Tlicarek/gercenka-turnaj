@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +8,10 @@ import { Game } from '@/pages/Index';
 
 interface FieldScheduleProps {
   games: Game[];
+  numberOfCourts: number;
 }
 
-const FieldSchedule = ({ games }: FieldScheduleProps) => {
+const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
   const [selectedField, setSelectedField] = useState<string>('all');
 
   const fields = ['Field 1', 'Field 2', 'Field 3', 'Field 4'];

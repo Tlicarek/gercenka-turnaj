@@ -178,6 +178,9 @@ const ScoreBoard = ({
         field: `Court ${(index % tournamentSettings.numberOfCourts) + 1}`,
         phase: 'quarterfinal' as const,
         isRunning: false,
+        team1Score: 0,
+        team2Score: 0,
+        time: '00:00'
       }));
 
       onPhaseChange('quarterfinal');

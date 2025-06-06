@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Team, Game, TournamentSettings } from '@/pages/Index';
 import { Plus, Minus, Trophy, Clock, Edit, Trash2 } from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ScoreBoardProps {
   games: Game[];
@@ -30,6 +31,7 @@ const ScoreBoard = ({
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editTeam1Score, setEditTeam1Score] = useState(0);
   const [editTeam2Score, setEditTeam2Score] = useState(0);
+  const isMobile = useIsMobile();
 
   const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
     const updatedGames = games.map(game => {
@@ -150,11 +152,12 @@ const ScoreBoard = ({
 
   const generateKnockoutPhase = (phase: 'quarterfinal' | 'semifinal' | 'final', currentGames: Game[]) => {
     const topTeams = getTopTeamsFromGroups();
+    const expectedTeams = tournamentSettings.numberOfGroups * tournamentSettings.teamsAdvancingFromGroup;
     
-    if (topTeams.length < 8) {
+    if (topTeams.length < expectedTeams) {
       toast({
         title: "Not Ready",
-        description: "Need at least 8 teams to generate knockout phase",
+        description: `Need ${expectedTeams} teams to generate knockout phase`,
         variant: "destructive",
       });
       return;
@@ -164,22 +167,34 @@ const ScoreBoard = ({
     let gameId = Date.now();
 
     if (phase === 'quarterfinal') {
-      const quarterfinalPairs = [
-        [topTeams[0], topTeams[7]],
-        [topTeams[1], topTeams[6]],
-        [topTeams[2], topTeams[5]],
-        [topTeams[3], topTeams[4]],
-      ];
+      // Generate knockout games based on number of advancing teams
+      const matchups: [Team, Team][] = [];
+      
+      if (tournamentSettings.teamsAdvancingFromGroup === 2) {
+        // Standard 8-team bracket
+        for (let i = 0; i < topTeams.length; i += 2) {
+          if (i + 1 < topTeams.length) {
+            matchups.push([topTeams[i], topTeams[i + 1]]);
+          }
+        }
+      } else {
+        // 4-team bracket (one team per group)
+        for (let i = 0; i < topTeams.length; i += 2) {
+          if (i + 1 < topTeams.length) {
+            matchups.push([topTeams[i], topTeams[i + 1]]);
+          }
+        }
+      }
 
-      newGames = quarterfinalPairs.map((pair, index) => ({
+      newGames = matchups.map((pair, index) => ({
         id: (gameId++).toString(),
         team1: pair[0],
         team2: pair[1],
-        sets: [{
+        sets: Array.from({length: tournamentSettings.numberOfSets}, () => ({
           team1Score: 0,
           team2Score: 0,
           isComplete: false
-        }],
+        })),
         currentSet: 0,
         isComplete: false,
         field: `Court ${(index % tournamentSettings.numberOfCourts) + 1}`,
@@ -192,8 +207,8 @@ const ScoreBoard = ({
 
       onPhaseChange('quarterfinal');
       toast({
-        title: "Quarterfinals Generated!",
-        description: "Knockout phase has begun!",
+        title: "Knockout Phase Generated!",
+        description: `${matchups.length} matches created!`,
       });
     }
 
@@ -212,7 +227,7 @@ const ScoreBoard = ({
           return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
         });
       
-      topTeams.push(...groupTeams.slice(0, 2));
+      topTeams.push(...groupTeams.slice(0, tournamentSettings.teamsAdvancingFromGroup));
     });
 
     return topTeams;
@@ -310,10 +325,10 @@ const ScoreBoard = ({
   const pendingGames = games.filter(g => !g.isComplete && !g.isRunning);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Phase Header */}
       <div className="text-center">
-        <Badge className="text-lg px-4 py-2 bg-gradient-to-r from-orange-500 to-blue-500 text-white">
+        <Badge className={`${isMobile ? 'text-base px-3 py-1' : 'text-lg px-4 py-2'} bg-gradient-to-r from-orange-500 to-blue-500 text-white`}>
           {currentPhase.charAt(0).toUpperCase() + currentPhase.slice(1)} Phase
         </Badge>
       </div>
@@ -321,107 +336,111 @@ const ScoreBoard = ({
       {/* Running Games */}
       {runningGames.length > 0 && (
         <div>
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Clock className="text-green-500" size={24} />
-            Live Games (Admin Can Edit)
+          <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold mb-3 sm:mb-4 flex items-center gap-2`}>
+            <Clock className="text-green-500" size={isMobile ? 20 : 24} />
+            Live Games {!isMobile && '(Admin Can Edit)'}
           </h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-4 sm:gap-6`}>
             {runningGames.map(game => {
               const currentSet = game.sets[game.currentSet] || { team1Score: 0, team2Score: 0, isComplete: false };
               
               return (
                 <Card key={game.id} className="bg-white/90 backdrop-blur-sm border-2 border-green-400">
-                  <CardHeader className="pb-3">
+                  <CardHeader className={`${isMobile ? 'pb-2 px-3 pt-3' : 'pb-3'}`}>
                     <div className="flex justify-between items-center">
-                      <CardTitle className="text-lg">{game.field}</CardTitle>
-                      <div className="flex gap-2">
-                        <Badge className="bg-green-500 text-white">LIVE</Badge>
+                      <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'}`}>{game.field}</CardTitle>
+                      <div className="flex gap-1 sm:gap-2">
+                        <Badge className="bg-green-500 text-white text-xs">LIVE</Badge>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => startEditGame(game)}
+                          className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
-                          <Edit size={16} />
+                          <Edit size={isMobile ? 12 : 16} />
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={() => removeGame(game.id)}
+                          className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={isMobile ? 12 : 16} />
                         </Button>
                       </div>
                     </div>
-                    {game.group && <Badge variant="outline">Group {game.group}</Badge>}
+                    {game.group && <Badge variant="outline" className="text-xs">Group {game.group}</Badge>}
                     {tournamentSettings.winCondition === 'sets' && (
-                      <Badge variant="outline">Set {game.currentSet + 1}/{tournamentSettings.numberOfSets}</Badge>
+                      <Badge variant="outline" className="text-xs">Set {game.currentSet + 1}/{tournamentSettings.numberOfSets}</Badge>
                     )}
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className={`space-y-3 sm:space-y-4 ${isMobile ? 'px-3 pb-3' : ''}`}>
                     {/* Team 1 */}
-                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-lg">{game.team1.name}</span>
-                        <Badge variant="outline">Group {game.team1.group}</Badge>
+                    <div className={`flex items-center justify-between ${isMobile ? 'p-2' : 'p-3'} bg-blue-50 rounded-lg`}>
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                        <span className={`font-bold ${isMobile ? 'text-sm' : 'text-lg'} truncate`}>{game.team1.name}</span>
+                        <Badge variant="outline" className="text-xs shrink-0">Group {game.team1.group}</Badge>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => updateScore(game.id, 'team1', -1)}
                           disabled={currentSet.team1Score === 0}
+                          className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
-                          <Minus size={16} />
+                          <Minus size={isMobile ? 12 : 16} />
                         </Button>
-                        <div className="text-3xl font-bold text-blue-600 min-w-[3rem] text-center">
+                        <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-blue-600 min-w-[2.5rem] sm:min-w-[3rem] text-center`}>
                           {currentSet.team1Score}
                         </div>
                         <Button
                           size="sm"
                           onClick={() => updateScore(game.id, 'team1', 1)}
-                          className="bg-blue-500 hover:bg-blue-600"
+                          className={`bg-blue-500 hover:bg-blue-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
                         >
-                          <Plus size={16} />
+                          <Plus size={isMobile ? 12 : 16} />
                         </Button>
                       </div>
                     </div>
 
                     {/* VS Divider */}
-                    <div className="text-center text-xl font-bold text-gray-500">VS</div>
+                    <div className={`text-center ${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-500`}>VS</div>
 
                     {/* Team 2 */}
-                    <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-lg">{game.team2.name}</span>
-                        <Badge variant="outline">Group {game.team2.group}</Badge>
+                    <div className={`flex items-center justify-between ${isMobile ? 'p-2' : 'p-3'} bg-orange-50 rounded-lg`}>
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                        <span className={`font-bold ${isMobile ? 'text-sm' : 'text-lg'} truncate`}>{game.team2.name}</span>
+                        <Badge variant="outline" className="text-xs shrink-0">Group {game.team2.group}</Badge>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => updateScore(game.id, 'team2', -1)}
                           disabled={currentSet.team2Score === 0}
+                          className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
-                          <Minus size={16} />
+                          <Minus size={isMobile ? 12 : 16} />
                         </Button>
-                        <div className="text-3xl font-bold text-orange-600 min-w-[3rem] text-center">
+                        <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-orange-600 min-w-[2.5rem] sm:min-w-[3rem] text-center`}>
                           {currentSet.team2Score}
                         </div>
                         <Button
                           size="sm"
                           onClick={() => updateScore(game.id, 'team2', 1)}
-                          className="bg-orange-500 hover:bg-orange-600"
+                          className={`bg-orange-500 hover:bg-orange-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
                         >
-                          <Plus size={16} />
+                          <Plus size={isMobile ? 12 : 16} />
                         </Button>
                       </div>
                     </div>
 
                     {/* Sets Display for multi-set games */}
                     {tournamentSettings.winCondition === 'sets' && game.sets.length > 1 && (
-                      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                        <div className="text-sm font-medium mb-2">Sets Won</div>
-                        <div className="flex justify-between">
+                      <div className={`mt-3 sm:mt-4 ${isMobile ? 'p-2' : 'p-3'} bg-gray-50 rounded-lg`}>
+                        <div className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium mb-2`}>Sets Won</div>
+                        <div className={`flex justify-between ${isMobile ? 'text-xs' : 'text-sm'}`}>
                           <span>
                             {game.team1.name}: {game.sets.filter(set => set.isComplete && set.team1Score > set.team2Score).length}
                           </span>
@@ -442,42 +461,44 @@ const ScoreBoard = ({
       {/* Pending Games */}
       {pendingGames.length > 0 && (
         <div>
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Clock className="text-orange-500" size={24} />
+          <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold mb-3 sm:mb-4 flex items-center gap-2`}>
+            <Clock className="text-orange-500" size={isMobile ? 20 : 24} />
             Pending Games
           </h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-4 sm:gap-6`}>
             {pendingGames.map(game => (
               <Card key={game.id} className="bg-white/90 backdrop-blur-sm border border-orange-200">
-                <CardHeader className="pb-3">
+                <CardHeader className={`${isMobile ? 'pb-2 px-3 pt-3' : 'pb-3'}`}>
                   <div className="flex justify-between items-center">
-                    <CardTitle className="text-lg">{game.field}</CardTitle>
-                    <div className="flex gap-2">
-                      <Badge className="bg-orange-500 text-white">PENDING</Badge>
+                    <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'}`}>{game.field}</CardTitle>
+                    <div className="flex gap-1 sm:gap-2">
+                      <Badge className="bg-orange-500 text-white text-xs">PENDING</Badge>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => startEditGame(game)}
+                        className={isMobile ? 'h-7 w-7 p-0' : ''}
                       >
-                        <Edit size={16} />
+                        <Edit size={isMobile ? 12 : 16} />
                       </Button>
                       <Button
                         size="sm"
                         variant="destructive"
                         onClick={() => removeGame(game.id)}
+                        className={isMobile ? 'h-7 w-7 p-0' : ''}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={isMobile ? 12 : 16} />
                       </Button>
                     </div>
                   </div>
-                  {game.group && <Badge variant="outline">Group {game.group}</Badge>}
+                  {game.group && <Badge variant="outline" className="text-xs">Group {game.group}</Badge>}
                 </CardHeader>
-                <CardContent>
+                <CardContent className={isMobile ? 'px-3 pb-3' : ''}>
                   <div className="text-center space-y-2">
-                    <div className="flex items-center justify-center gap-2 text-lg font-bold">
-                      <span>{game.team1.name}</span>
+                    <div className={`flex items-center justify-center gap-2 ${isMobile ? 'text-base' : 'text-lg'} font-bold`}>
+                      <span className="truncate">{game.team1.name}</span>
                       <span className="text-gray-400">vs</span>
-                      <span>{game.team2.name}</span>
+                      <span className="truncate">{game.team2.name}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -490,11 +511,11 @@ const ScoreBoard = ({
       {/* Completed Games */}
       {completedGames.length > 0 && (
         <div>
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Trophy className="text-yellow-500" size={24} />
+          <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold mb-3 sm:mb-4 flex items-center gap-2`}>
+            <Trophy className="text-yellow-500" size={isMobile ? 20 : 24} />
             Completed Games
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'} gap-3 sm:gap-4`}>
             {completedGames.slice(-6).map(game => {
               const finalScore = tournamentSettings.winCondition === 'sets' 
                 ? {
@@ -508,39 +529,41 @@ const ScoreBoard = ({
 
               return (
                 <Card key={game.id} className="bg-white/90 backdrop-blur-sm border border-gray-200">
-                  <CardContent className="p-4">
+                  <CardContent className={`${isMobile ? 'p-3' : 'p-4'}`}>
                     <div className="text-center space-y-2">
                       <div className="flex justify-end gap-1 mb-2">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => startEditGame(game)}
+                          className={isMobile ? 'h-6 w-6 p-0' : ''}
                         >
-                          <Edit size={14} />
+                          <Edit size={isMobile ? 10 : 14} />
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={() => removeGame(game.id)}
+                          className={isMobile ? 'h-6 w-6 p-0' : ''}
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={isMobile ? 10 : 14} />
                         </Button>
                       </div>
-                      <div className="text-sm text-gray-600">{game.field}</div>
-                      <div className="flex items-center justify-center gap-2 text-lg font-bold">
-                        <span className={finalScore.team1 > finalScore.team2 ? 'text-green-600' : 'text-gray-600'}>
+                      <div className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>{game.field}</div>
+                      <div className={`flex items-center justify-center gap-1 sm:gap-2 ${isMobile ? 'text-sm' : 'text-lg'} font-bold`}>
+                        <span className={`truncate ${finalScore.team1 > finalScore.team2 ? 'text-green-600' : 'text-gray-600'}`}>
                           {game.team1.name}
                         </span>
-                        <span className="text-2xl">{finalScore.team1}</span>
+                        <span className={isMobile ? 'text-lg' : 'text-2xl'}>{finalScore.team1}</span>
                         <span className="text-gray-400">-</span>
-                        <span className="text-2xl">{finalScore.team2}</span>
-                        <span className={finalScore.team2 > finalScore.team1 ? 'text-green-600' : 'text-gray-600'}>
+                        <span className={isMobile ? 'text-lg' : 'text-2xl'}>{finalScore.team2}</span>
+                        <span className={`truncate ${finalScore.team2 > finalScore.team1 ? 'text-green-600' : 'text-gray-600'}`}>
                           {game.team2.name}
                         </span>
                       </div>
                       {game.group && <Badge variant="outline" className="text-xs">Group {game.group}</Badge>}
                       {game.winner && (
-                        <div className="text-sm text-green-600 font-medium">
+                        <div className={`${isMobile ? 'text-xs' : 'text-sm'} text-green-600 font-medium`}>
                           🏆 {game.winner.name} wins!
                         </div>
                       )}
@@ -555,8 +578,8 @@ const ScoreBoard = ({
 
       {runningGames.length === 0 && completedGames.length === 0 && pendingGames.length === 0 && (
         <Card className="bg-white/90 backdrop-blur-sm">
-          <CardContent className="p-8 text-center">
-            <div className="text-gray-500 text-lg">
+          <CardContent className={`${isMobile ? 'p-6' : 'p-8'} text-center`}>
+            <div className={`text-gray-500 ${isMobile ? 'text-base' : 'text-lg'}`}>
               No games available. Use the Admin Panel to create and start games.
             </div>
           </CardContent>
@@ -566,39 +589,41 @@ const ScoreBoard = ({
       {/* Edit Game Dialog */}
       {editingGame && (
         <Dialog open={!!editingGame} onOpenChange={() => setEditingGame(null)}>
-          <DialogContent>
+          <DialogContent className={isMobile ? 'w-[95vw] max-w-md' : ''}>
             <DialogHeader>
-              <DialogTitle>Edit Game Score</DialogTitle>
+              <DialogTitle className={isMobile ? 'text-base' : ''}>Edit Game Score</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="text-center text-lg font-bold">
+              <div className={`text-center ${isMobile ? 'text-sm' : 'text-lg'} font-bold`}>
                 {editingGame.team1.name} vs {editingGame.team2.name}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid grid-cols-2 gap-3 sm:gap-4`}>
                 <div>
-                  <label className="block text-sm font-medium mb-1">{editingGame.team1.name} Score</label>
+                  <label className={`block ${isMobile ? 'text-xs' : 'text-sm'} font-medium mb-1`}>{editingGame.team1.name} Score</label>
                   <Input
                     type="number"
                     min="0"
                     value={editTeam1Score}
                     onChange={(e) => setEditTeam1Score(parseInt(e.target.value) || 0)}
+                    className={isMobile ? 'text-sm' : ''}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">{editingGame.team2.name} Score</label>
+                  <label className={`block ${isMobile ? 'text-xs' : 'text-sm'} font-medium mb-1`}>{editingGame.team2.name} Score</label>
                   <Input
                     type="number"
                     min="0"
                     value={editTeam2Score}
                     onChange={(e) => setEditTeam2Score(parseInt(e.target.value) || 0)}
+                    className={isMobile ? 'text-sm' : ''}
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={saveEditGame} className="flex-1">
+              <div className={`flex gap-2 ${isMobile ? 'flex-col' : ''}`}>
+                <Button onClick={saveEditGame} className={`flex-1 ${isMobile ? 'text-sm' : ''}`}>
                   Save Changes
                 </Button>
-                <Button onClick={() => setEditingGame(null)} variant="outline" className="flex-1">
+                <Button onClick={() => setEditingGame(null)} variant="outline" className={`flex-1 ${isMobile ? 'text-sm' : ''}`}>
                   Cancel
                 </Button>
               </div>

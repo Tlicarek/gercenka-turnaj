@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Team, Game, TournamentSettings } from '@/pages/Index';
+import { Team, Game, TournamentSettings, GameSet } from '@/pages/Index';
 import { toast } from '@/hooks/use-toast';
 
 export const useTournamentData = () => {
@@ -52,6 +52,7 @@ export const useTournamentData = () => {
           pointsToWinSet: data.points_to_win_set,
           adminPassword: data.admin_password,
           teamsAdvancingFromGroup: data.teams_advancing_from_group as 1 | 2,
+          autoStartDelay: data.auto_start_delay,
         });
       }
     } catch (error) {
@@ -107,52 +108,69 @@ export const useTournamentData = () => {
         return;
       }
 
-      const mappedGames: Game[] = data.map(game => ({
-        id: game.id,
-        team1: {
-          id: game.team1.id,
-          name: game.team1.name,
-          group: game.team1.group_letter,
-          wins: game.team1.wins,
-          losses: game.team1.losses,
-          pointsFor: game.team1.points_for,
-          pointsAgainst: game.team1.points_against,
-          setsWon: game.team1.sets_won,
-          setsLost: game.team1.sets_lost,
-        },
-        team2: {
-          id: game.team2.id,
-          name: game.team2.name,
-          group: game.team2.group_letter,
-          wins: game.team2.wins,
-          losses: game.team2.losses,
-          pointsFor: game.team2.points_for,
-          pointsAgainst: game.team2.points_against,
-          setsWon: game.team2.sets_won,
-          setsLost: game.team2.sets_lost,
-        },
-        sets: game.sets || [],
-        currentSet: game.current_set,
-        isComplete: game.is_complete,
-        field: game.field,
-        phase: game.phase as 'group' | 'quarterfinal' | 'semifinal' | 'final',
-        group: game.group_letter,
-        winner: game.winner ? {
-          id: game.winner.id,
-          name: game.winner.name,
-          group: game.winner.group_letter,
-          wins: game.winner.wins,
-          losses: game.winner.losses,
-          pointsFor: game.winner.points_for,
-          pointsAgainst: game.winner.points_against,
-          setsWon: game.winner.sets_won,
-          setsLost: game.winner.sets_lost,
-        } : undefined,
-        isRunning: game.is_running,
-        team1Score: game.team1_score,
-        team2Score: game.team2_score,
-        time: '00:00'
-      }));
+      const mappedGames: Game[] = data.map(game => {
+        // Parse sets from Json to GameSet[]
+        let parsedSets: GameSet[] = [];
+        try {
+          if (Array.isArray(game.sets)) {
+            parsedSets = game.sets as GameSet[];
+          } else if (typeof game.sets === 'string') {
+            parsedSets = JSON.parse(game.sets);
+          } else {
+            parsedSets = [];
+          }
+        } catch (e) {
+          console.error('Error parsing sets:', e);
+          parsedSets = [];
+        }
+
+        return {
+          id: game.id,
+          team1: {
+            id: game.team1.id,
+            name: game.team1.name,
+            group: game.team1.group_letter,
+            wins: game.team1.wins,
+            losses: game.team1.losses,
+            pointsFor: game.team1.points_for,
+            pointsAgainst: game.team1.points_against,
+            setsWon: game.team1.sets_won,
+            setsLost: game.team1.sets_lost,
+          },
+          team2: {
+            id: game.team2.id,
+            name: game.team2.name,
+            group: game.team2.group_letter,
+            wins: game.team2.wins,
+            losses: game.team2.losses,
+            pointsFor: game.team2.points_for,
+            pointsAgainst: game.team2.points_against,
+            setsWon: game.team2.sets_won,
+            setsLost: game.team2.sets_lost,
+          },
+          sets: parsedSets,
+          currentSet: game.current_set,
+          isComplete: game.is_complete,
+          field: game.field,
+          phase: game.phase as 'group' | 'quarterfinal' | 'semifinal' | 'final',
+          group: game.group_letter,
+          winner: game.winner ? {
+            id: game.winner.id,
+            name: game.winner.name,
+            group: game.winner.group_letter,
+            wins: game.winner.wins,
+            losses: game.winner.losses,
+            pointsFor: game.winner.points_for,
+            pointsAgainst: game.winner.points_against,
+            setsWon: game.winner.sets_won,
+            setsLost: game.winner.sets_lost,
+          } : undefined,
+          isRunning: game.is_running,
+          team1Score: game.team1_score,
+          team2Score: game.team2_score,
+          time: '00:00'
+        };
+      });
 
       setGames(mappedGames);
     } catch (error) {
@@ -194,13 +212,16 @@ export const useTournamentData = () => {
 
   const saveGame = async (game: Game) => {
     try {
+      // Convert GameSet[] to Json compatible format
+      const setsJson = JSON.stringify(game.sets);
+      
       const { error } = await supabase
         .from('games')
         .upsert({
           id: game.id,
           team1_id: game.team1.id,
           team2_id: game.team2.id,
-          sets: game.sets,
+          sets: setsJson,
           current_set: game.currentSet,
           is_complete: game.isComplete,
           field: game.field,
@@ -244,6 +265,7 @@ export const useTournamentData = () => {
           points_to_win_set: settings.pointsToWinSet,
           admin_password: settings.adminPassword,
           teams_advancing_from_group: settings.teamsAdvancingFromGroup,
+          auto_start_delay: settings.autoStartDelay || 0,
           updated_at: new Date().toISOString(),
         })
         .eq('is_active', true);

@@ -30,6 +30,7 @@ export interface GameSet {
   team1Score: number;
   team2Score: number;
   isComplete: boolean;
+  [key: string]: any; // Make it compatible with Json type
 }
 
 export interface Game {
@@ -250,7 +251,7 @@ const Index = () => {
               onResetTournament={handleResetTournament}
               currentPhase={currentPhase}
               onPhaseChange={setCurrentPhase}
-              onGenerateGroupStage={generateRoundRobinGames}
+              generateRoundRobinGames={generateRoundRobinGames}
             />
           </TabsContent>
         </Tabs>

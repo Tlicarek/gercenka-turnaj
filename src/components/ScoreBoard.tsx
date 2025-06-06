@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Team, Game, TournamentSettings } from '@/pages/Index';
-import { Plus, Minus, Trophy, Clock } from 'lucide-react';
+import { Plus, Minus, Trophy, Clock, Edit, Trash2 } from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
 
 interface ScoreBoardProps {
@@ -26,6 +27,10 @@ const ScoreBoard = ({
   onPhaseChange,
   tournamentSettings 
 }: ScoreBoardProps) => {
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [editTeam1Score, setEditTeam1Score] = useState(0);
+  const [editTeam2Score, setEditTeam2Score] = useState(0);
+
   const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
     const updatedGames = games.map(game => {
       if (game.id === gameId && !game.isComplete && game.isRunning) {
@@ -43,7 +48,7 @@ const ScoreBoard = ({
         if (tournamentSettings.winCondition === 'points') {
           isSetComplete = newScore >= tournamentSettings.pointsToWin;
         } else if (tournamentSettings.winCondition === 'sets') {
-          isSetComplete = newScore >= 25 || (newScore >= 15 && Math.abs(newScore - otherTeamScore) >= 2);
+          isSetComplete = newScore >= tournamentSettings.pointsToWinSet || (newScore >= 15 && Math.abs(newScore - otherTeamScore) >= 2);
         }
 
         const updatedSets = game.sets.map((set, index) => {
@@ -89,7 +94,9 @@ const ScoreBoard = ({
           currentSet: newCurrentSet,
           isComplete: isGameComplete,
           isRunning: isGameComplete ? false : game.isRunning,
-          winner: isGameComplete ? (team === 'team1' ? game.team1 : game.team2) : undefined
+          winner: isGameComplete ? (team === 'team1' ? game.team1 : game.team2) : undefined,
+          team1Score: updatedSets[0]?.team1Score || 0,
+          team2Score: updatedSets[0]?.team2Score || 0
         };
       }
       return game;
@@ -211,8 +218,96 @@ const ScoreBoard = ({
     return topTeams;
   };
 
+  const startEditGame = (game: Game) => {
+    setEditingGame(game);
+    const currentSet = game.sets[0] || { team1Score: 0, team2Score: 0, isComplete: false };
+    setEditTeam1Score(currentSet.team1Score);
+    setEditTeam2Score(currentSet.team2Score);
+  };
+
+  const saveEditGame = () => {
+    if (!editingGame) return;
+
+    const updatedGames = games.map(game => {
+      if (game.id === editingGame.id) {
+        const updatedSets = game.sets.map((set, index) => {
+          if (index === 0) {
+            return {
+              ...set,
+              team1Score: editTeam1Score,
+              team2Score: editTeam2Score,
+              isComplete: true
+            };
+          }
+          return set;
+        });
+
+        const winner = editTeam1Score > editTeam2Score ? game.team1 : game.team2;
+        const loser = editTeam1Score > editTeam2Score ? game.team2 : game.team1;
+
+        // Update team stats if game is being completed
+        if (!game.isComplete) {
+          updateTeamStatsManual(winner.id, loser.id, Math.max(editTeam1Score, editTeam2Score), Math.min(editTeam1Score, editTeam2Score));
+        }
+
+        return {
+          ...game,
+          sets: updatedSets,
+          isComplete: true,
+          isRunning: false,
+          winner,
+          team1Score: editTeam1Score,
+          team2Score: editTeam2Score
+        };
+      }
+      return game;
+    });
+
+    onGameUpdate(updatedGames);
+    setEditingGame(null);
+    
+    toast({
+      title: "Game Updated",
+      description: "Game score has been updated successfully",
+    });
+  };
+
+  const updateTeamStatsManual = (winnerTeamId: string, loserTeamId: string, winnerScore: number, loserScore: number) => {
+    const updatedTeams = teams.map(team => {
+      if (team.id === winnerTeamId) {
+        return {
+          ...team,
+          wins: team.wins + 1,
+          pointsFor: team.pointsFor + winnerScore,
+          pointsAgainst: team.pointsAgainst + loserScore,
+        };
+      } else if (team.id === loserTeamId) {
+        return {
+          ...team,
+          losses: team.losses + 1,
+          pointsFor: team.pointsFor + loserScore,
+          pointsAgainst: team.pointsAgainst + winnerScore,
+        };
+      }
+      return team;
+    });
+    
+    onTeamUpdate(updatedTeams);
+  };
+
+  const removeGame = (gameId: string) => {
+    const updatedGames = games.filter(game => game.id !== gameId);
+    onGameUpdate(updatedGames);
+    
+    toast({
+      title: "Game Removed",
+      description: "Game has been successfully removed",
+    });
+  };
+
   const runningGames = games.filter(g => g.isRunning);
   const completedGames = games.filter(g => g.isComplete);
+  const pendingGames = games.filter(g => !g.isComplete && !g.isRunning);
 
   return (
     <div className="space-y-6">
@@ -239,7 +334,23 @@ const ScoreBoard = ({
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-center">
                       <CardTitle className="text-lg">{game.field}</CardTitle>
-                      <Badge className="bg-green-500 text-white">LIVE</Badge>
+                      <div className="flex gap-2">
+                        <Badge className="bg-green-500 text-white">LIVE</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => startEditGame(game)}
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removeGame(game.id)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </div>
                     {game.group && <Badge variant="outline">Group {game.group}</Badge>}
                     {tournamentSettings.winCondition === 'sets' && (
@@ -328,6 +439,54 @@ const ScoreBoard = ({
         </div>
       )}
 
+      {/* Pending Games */}
+      {pendingGames.length > 0 && (
+        <div>
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Clock className="text-orange-500" size={24} />
+            Pending Games
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {pendingGames.map(game => (
+              <Card key={game.id} className="bg-white/90 backdrop-blur-sm border border-orange-200">
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg">{game.field}</CardTitle>
+                    <div className="flex gap-2">
+                      <Badge className="bg-orange-500 text-white">PENDING</Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startEditGame(game)}
+                      >
+                        <Edit size={16} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => removeGame(game.id)}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                  {game.group && <Badge variant="outline">Group {game.group}</Badge>}
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center space-y-2">
+                    <div className="flex items-center justify-center gap-2 text-lg font-bold">
+                      <span>{game.team1.name}</span>
+                      <span className="text-gray-400">vs</span>
+                      <span>{game.team2.name}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Completed Games */}
       {completedGames.length > 0 && (
         <div>
@@ -351,6 +510,22 @@ const ScoreBoard = ({
                 <Card key={game.id} className="bg-white/90 backdrop-blur-sm border border-gray-200">
                   <CardContent className="p-4">
                     <div className="text-center space-y-2">
+                      <div className="flex justify-end gap-1 mb-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => startEditGame(game)}
+                        >
+                          <Edit size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removeGame(game.id)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
                       <div className="text-sm text-gray-600">{game.field}</div>
                       <div className="flex items-center justify-center gap-2 text-lg font-bold">
                         <span className={finalScore.team1 > finalScore.team2 ? 'text-green-600' : 'text-gray-600'}>
@@ -378,7 +553,7 @@ const ScoreBoard = ({
         </div>
       )}
 
-      {runningGames.length === 0 && completedGames.length === 0 && (
+      {runningGames.length === 0 && completedGames.length === 0 && pendingGames.length === 0 && (
         <Card className="bg-white/90 backdrop-blur-sm">
           <CardContent className="p-8 text-center">
             <div className="text-gray-500 text-lg">
@@ -386,6 +561,50 @@ const ScoreBoard = ({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Edit Game Dialog */}
+      {editingGame && (
+        <Dialog open={!!editingGame} onOpenChange={() => setEditingGame(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Game Score</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-center text-lg font-bold">
+                {editingGame.team1.name} vs {editingGame.team2.name}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{editingGame.team1.name} Score</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editTeam1Score}
+                    onChange={(e) => setEditTeam1Score(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">{editingGame.team2.name} Score</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editTeam2Score}
+                    onChange={(e) => setEditTeam2Score(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={saveEditGame} className="flex-1">
+                  Save Changes
+                </Button>
+                <Button onClick={() => setEditingGame(null)} variant="outline" className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -248,7 +247,7 @@ const AdminPanel = ({
     let qualifiedTeams: Team[] = [];
 
     if (tournamentSettings.numberOfGroups === 1) {
-      // Single group - take top 8 teams
+      // Single group - take top 8 teams based on current standings
       const groupTeams = teams
         .filter(team => team.group === 'A')
         .sort((a, b) => {
@@ -259,25 +258,44 @@ const AdminPanel = ({
       qualifiedTeams = groupTeams.slice(0, 8);
       
       if (qualifiedTeams.length < 8) {
-        toast({
-          title: "Not Enough Teams",
-          description: `Need at least 8 teams in group. Currently have ${qualifiedTeams.length} teams.`,
-          variant: "destructive",
-        });
-        return;
+        // If not enough teams, just take what we have and warn
+        qualifiedTeams = groupTeams;
+        if (qualifiedTeams.length < 4) {
+          toast({
+            title: "Not Enough Teams",
+            description: `Need at least 4 teams. Currently have ${qualifiedTeams.length} teams.`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
     } else {
-      // Multiple groups - take top 2 from each group
-      qualifiedTeams = getQualifiedTeams();
+      // Multiple groups - take top teams from each group (or all available teams if not enough)
+      qualifiedTeams = getQualifiedTeamsFlexible();
       
-      if (qualifiedTeams.length < 8) {
+      if (qualifiedTeams.length < 4) {
         toast({
           title: "Not Enough Teams",
-          description: "Need at least 8 qualified teams (top 2 from each group)",
+          description: `Need at least 4 teams. Currently have ${qualifiedTeams.length} teams.`,
           variant: "destructive",
         });
         return;
       }
+    }
+
+    // Pad with dummy teams if needed for bracket structure
+    while (qualifiedTeams.length < 8) {
+      qualifiedTeams.push({
+        id: `dummy-${qualifiedTeams.length}`,
+        name: `TBD ${qualifiedTeams.length + 1}`,
+        group: '',
+        wins: 0,
+        losses: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        setsWon: 0,
+        setsLost: 0
+      });
     }
 
     const newGames: Game[] = [];
@@ -392,11 +410,11 @@ const AdminPanel = ({
     
     toast({
       title: "Knockout Stage Generated",
-      description: `Generated ${newGames.length} knockout games`,
+      description: `Generated ${newGames.length} knockout games with ${qualifiedTeams.filter(t => !t.id.startsWith('dummy')).length} real teams`,
     });
   };
 
-  const getQualifiedTeams = () => {
+  const getQualifiedTeamsFlexible = () => {
     const groups = getGroupNames();
     const qualifiedTeams: Team[] = [];
 
@@ -408,8 +426,21 @@ const AdminPanel = ({
           return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
         });
       
-      qualifiedTeams.push(...groupTeams.slice(0, 2));
+      // Take top 2 teams from each group, or all if less than 2
+      qualifiedTeams.push(...groupTeams.slice(0, Math.min(2, groupTeams.length)));
     });
+
+    // If we still don't have enough teams, take more from the groups
+    if (qualifiedTeams.length < 8) {
+      const remainingTeams = teams
+        .filter(team => !qualifiedTeams.some(qt => qt.id === team.id))
+        .sort((a, b) => {
+          if (a.wins !== b.wins) return b.wins - a.wins;
+          return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+        });
+      
+      qualifiedTeams.push(...remainingTeams.slice(0, 8 - qualifiedTeams.length));
+    }
 
     return qualifiedTeams;
   };
@@ -720,13 +751,10 @@ const AdminPanel = ({
             <Button 
               onClick={generateKnockoutGames} 
               className="bg-orange-500 hover:bg-orange-600"
-              disabled={tournamentSettings.numberOfGroups === 1 ? 
-                teams.filter(t => t.group === 'A').length < 8 : 
-                getQualifiedTeams().length < 8
-              }
+              disabled={teams.length < 4}
             >
               <ArrowRight size={16} className="mr-2" />
-              Generate Knockout Stage
+              Force Generate Knockout Stage
             </Button>
             
             <Dialog>

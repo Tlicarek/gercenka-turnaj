@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,8 +48,6 @@ const AdminPanel = ({
   const [editTeamName, setEditTeamName] = useState('');
   const [editTeamGroup, setEditTeamGroup] = useState('');
 
-  const ADMIN_PASSWORD = 'admin123';
-
   const getGroupNames = () => {
     const groups = [];
     for (let i = 0; i < tournamentSettings.numberOfGroups; i++) {
@@ -66,7 +65,7 @@ const AdminPanel = ({
   };
 
   const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
+    if (password === tournamentSettings.adminPassword) {
       onAuthChange(true);
       toast({
         title: "Admin Access Granted",
@@ -178,6 +177,7 @@ const AdminPanel = ({
             isRunning: false,
             team1Score: 0,
             team2Score: 0,
+            time: '00:00',
           };
 
           if (tournamentSettings.winCondition === 'sets') {
@@ -245,15 +245,39 @@ const AdminPanel = ({
   };
 
   const generateKnockoutGames = () => {
-    const groupTeams = getQualifiedTeams();
-    
-    if (groupTeams.length < 8) {
-      toast({
-        title: "Not Enough Teams",
-        description: "Need at least 8 qualified teams (top 2 from each group)",
-        variant: "destructive",
-      });
-      return;
+    let qualifiedTeams: Team[] = [];
+
+    if (tournamentSettings.numberOfGroups === 1) {
+      // Single group - take top 8 teams
+      const groupTeams = teams
+        .filter(team => team.group === 'A')
+        .sort((a, b) => {
+          if (a.wins !== b.wins) return b.wins - a.wins;
+          return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+        });
+      
+      qualifiedTeams = groupTeams.slice(0, 8);
+      
+      if (qualifiedTeams.length < 8) {
+        toast({
+          title: "Not Enough Teams",
+          description: `Need at least 8 teams in group. Currently have ${qualifiedTeams.length} teams.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    } else {
+      // Multiple groups - take top 2 from each group
+      qualifiedTeams = getQualifiedTeams();
+      
+      if (qualifiedTeams.length < 8) {
+        toast({
+          title: "Not Enough Teams",
+          description: "Need at least 8 qualified teams (top 2 from each group)",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     const newGames: Game[] = [];
@@ -262,10 +286,10 @@ const AdminPanel = ({
 
     // Generate Quarterfinals
     const quarterfinalMatchups = [
-      [groupTeams[0], groupTeams[7]], // 1A vs 2D
-      [groupTeams[1], groupTeams[6]], // 1B vs 2C
-      [groupTeams[2], groupTeams[5]], // 1C vs 2B
-      [groupTeams[3], groupTeams[4]], // 1D vs 2A
+      [qualifiedTeams[0], qualifiedTeams[7]], // 1st vs 8th
+      [qualifiedTeams[1], qualifiedTeams[6]], // 2nd vs 7th
+      [qualifiedTeams[2], qualifiedTeams[5]], // 3rd vs 6th
+      [qualifiedTeams[3], qualifiedTeams[4]], // 4th vs 5th
     ];
 
     quarterfinalMatchups.forEach((matchup, index) => {
@@ -287,6 +311,7 @@ const AdminPanel = ({
         isRunning: false,
         team1Score: 0,
         team2Score: 0,
+        time: '00:00'
       };
 
       if (tournamentSettings.winCondition === 'sets') {
@@ -318,6 +343,7 @@ const AdminPanel = ({
         isRunning: false,
         team1Score: 0,
         team2Score: 0,
+        time: '00:00'
       };
 
       if (tournamentSettings.winCondition === 'sets') {
@@ -348,6 +374,7 @@ const AdminPanel = ({
       isRunning: false,
       team1Score: 0,
       team2Score: 0,
+      time: '00:00'
     };
 
     if (tournamentSettings.winCondition === 'sets') {
@@ -685,7 +712,7 @@ const AdminPanel = ({
             <Button 
               onClick={generateRoundRobin} 
               className="bg-purple-500 hover:bg-purple-600"
-              disabled={teams.length < 4}
+              disabled={teams.length < 2}
             >
               Generate Round Robin
             </Button>
@@ -693,7 +720,10 @@ const AdminPanel = ({
             <Button 
               onClick={generateKnockoutGames} 
               className="bg-orange-500 hover:bg-orange-600"
-              disabled={getQualifiedTeams().length < 8}
+              disabled={tournamentSettings.numberOfGroups === 1 ? 
+                teams.filter(t => t.group === 'A').length < 8 : 
+                getQualifiedTeams().length < 8
+              }
             >
               <ArrowRight size={16} className="mr-2" />
               Generate Knockout Stage

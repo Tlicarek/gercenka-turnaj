@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,8 @@ export interface TournamentSettings {
   timeLimit: number; // in minutes
   numberOfSets: number;
   setsToWin: number;
+  pointsToWinSet: number; // Points needed to win each set
+  adminPassword: string;
 }
 
 const Index = () => {
@@ -69,6 +72,8 @@ const Index = () => {
     timeLimit: 20,
     numberOfSets: 1,
     setsToWin: 1,
+    pointsToWinSet: 25,
+    adminPassword: 'admin123',
   });
 
   const handleTeamUpdate = (updatedTeams: Team[]) => {

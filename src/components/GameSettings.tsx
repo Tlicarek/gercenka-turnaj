@@ -45,7 +45,7 @@ const GameSettings = ({ settings, onSettingsUpdate }: GameSettingsProps) => {
             <Label>Number of Groups</Label>
             <Input
               type="number"
-              min="2"
+              min="1"
               max="8"
               value={settings.numberOfGroups}
               onChange={(e) => updateSetting('numberOfGroups', parseInt(e.target.value) || 2)}
@@ -113,8 +113,27 @@ const GameSettings = ({ settings, onSettingsUpdate }: GameSettingsProps) => {
                 onChange={(e) => updateSetting('setsToWin', parseInt(e.target.value) || 2)}
               />
             </div>
+            <div className="col-span-2">
+              <Label>Points to Win Each Set</Label>
+              <Input
+                type="number"
+                min="1"
+                value={settings.pointsToWinSet}
+                onChange={(e) => updateSetting('pointsToWinSet', parseInt(e.target.value) || 25)}
+              />
+            </div>
           </div>
         )}
+
+        <div>
+          <Label>Admin Password</Label>
+          <Input
+            type="password"
+            value={settings.adminPassword}
+            onChange={(e) => updateSetting('adminPassword', e.target.value)}
+            placeholder="Enter new admin password..."
+          />
+        </div>
       </CardContent>
     </Card>
   );

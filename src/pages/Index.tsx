@@ -9,7 +9,8 @@ import ScoreBoard from '@/components/ScoreBoard';
 import GroupStandings from '@/components/GroupStandings';
 import TournamentBracket from '@/components/TournamentBracket';
 import FieldSchedule from '@/components/FieldSchedule';
-import { Trophy, Users, Calendar, Target } from 'lucide-react';
+import PublicTVMode from '@/components/PublicTVMode';
+import { Trophy, Users, Calendar, Target, Tv } from 'lucide-react';
 
 export interface Team {
   id: string;
@@ -19,19 +20,38 @@ export interface Team {
   losses: number;
   pointsFor: number;
   pointsAgainst: number;
+  setsWon: number;
+  setsLost: number;
+}
+
+export interface GameSet {
+  team1Score: number;
+  team2Score: number;
+  isComplete: boolean;
 }
 
 export interface Game {
   id: string;
   team1: Team;
   team2: Team;
-  team1Score: number;
-  team2Score: number;
+  sets: GameSet[];
+  currentSet: number;
   isComplete: boolean;
   field: string;
-  time: string;
   phase: 'group' | 'quarterfinal' | 'semifinal' | 'final';
   group?: string;
+  winner?: Team;
+  isRunning: boolean;
+}
+
+export interface TournamentSettings {
+  numberOfCourts: number;
+  numberOfGroups: number;
+  winCondition: 'points' | 'time' | 'sets';
+  pointsToWin: number;
+  timeLimit: number; // in minutes
+  numberOfSets: number;
+  setsToWin: number;
 }
 
 const Index = () => {
@@ -39,6 +59,15 @@ const Index = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<'group' | 'quarterfinal' | 'semifinal' | 'final'>('group');
+  const [tournamentSettings, setTournamentSettings] = useState<TournamentSettings>({
+    numberOfCourts: 4,
+    numberOfGroups: 4,
+    winCondition: 'points',
+    pointsToWin: 15,
+    timeLimit: 20,
+    numberOfSets: 1,
+    setsToWin: 1,
+  });
 
   const handleTeamUpdate = (updatedTeams: Team[]) => {
     setTeams(updatedTeams);
@@ -48,11 +77,21 @@ const Index = () => {
     setGames(updatedGames);
   };
 
+  const handleSettingsUpdate = (newSettings: TournamentSettings) => {
+    setTournamentSettings(newSettings);
+  };
+
+  const resetTournament = () => {
+    setTeams([]);
+    setGames([]);
+    setCurrentPhase('group');
+  };
+
   const stats = {
     totalTeams: teams.length,
     completedGames: games.filter(g => g.isComplete).length,
     totalGames: games.length,
-    activeFields: new Set(games.filter(g => !g.isComplete).map(g => g.field)).size
+    activeCourts: games.filter(g => g.isRunning).length
   };
 
   return (
@@ -62,9 +101,9 @@ const Index = () => {
         <div className="text-center mb-8">
           <h1 className="text-5xl font-bold text-gray-800 mb-4 flex items-center justify-center gap-3">
             <Trophy className="text-orange-500" size={48} />
-            Volleyball Tournament Manager
+            Tournament Manager Pro
           </h1>
-          <p className="text-xl text-gray-600">Professional tournament management system</p>
+          <p className="text-xl text-gray-600">Advanced tournament management system</p>
         </div>
 
         {/* Stats Overview */}
@@ -86,8 +125,8 @@ const Index = () => {
           <Card className="bg-white/80 backdrop-blur-sm border-green-200">
             <CardContent className="p-4 text-center">
               <Calendar className="text-green-500 mx-auto mb-2" size={24} />
-              <div className="text-2xl font-bold text-gray-800">{stats.activeFields}</div>
-              <div className="text-sm text-gray-600">Active Fields</div>
+              <div className="text-2xl font-bold text-gray-800">{stats.activeCourts}/{tournamentSettings.numberOfCourts}</div>
+              <div className="text-sm text-gray-600">Active Courts</div>
             </CardContent>
           </Card>
           <Card className="bg-white/80 backdrop-blur-sm border-purple-200">
@@ -101,11 +140,15 @@ const Index = () => {
 
         {/* Main Content */}
         <Tabs defaultValue="scoreboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-6 bg-white/80 backdrop-blur-sm">
             <TabsTrigger value="scoreboard">Live Scores</TabsTrigger>
+            <TabsTrigger value="tv-mode">
+              <Tv size={16} className="mr-2" />
+              TV Mode
+            </TabsTrigger>
             <TabsTrigger value="standings">Group Standings</TabsTrigger>
             <TabsTrigger value="bracket">Tournament Bracket</TabsTrigger>
-            <TabsTrigger value="schedule">Field Schedule</TabsTrigger>
+            <TabsTrigger value="schedule">Court Schedule</TabsTrigger>
             <TabsTrigger value="admin">Admin Panel</TabsTrigger>
           </TabsList>
 
@@ -117,11 +160,20 @@ const Index = () => {
               onTeamUpdate={handleTeamUpdate}
               currentPhase={currentPhase}
               onPhaseChange={setCurrentPhase}
+              tournamentSettings={tournamentSettings}
+            />
+          </TabsContent>
+
+          <TabsContent value="tv-mode">
+            <PublicTVMode 
+              games={games}
+              teams={teams}
+              tournamentSettings={tournamentSettings}
             />
           </TabsContent>
 
           <TabsContent value="standings">
-            <GroupStandings teams={teams} />
+            <GroupStandings teams={teams} numberOfGroups={tournamentSettings.numberOfGroups} />
           </TabsContent>
 
           <TabsContent value="bracket">
@@ -133,7 +185,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="schedule">
-            <FieldSchedule games={games} />
+            <FieldSchedule games={games} numberOfCourts={tournamentSettings.numberOfCourts} />
           </TabsContent>
 
           <TabsContent value="admin">
@@ -144,6 +196,9 @@ const Index = () => {
               onGameUpdate={handleGameUpdate}
               isAuthenticated={isAdminAuthenticated}
               onAuthChange={setIsAdminAuthenticated}
+              tournamentSettings={tournamentSettings}
+              onSettingsUpdate={handleSettingsUpdate}
+              onResetTournament={resetTournament}
             />
           </TabsContent>
         </Tabs>

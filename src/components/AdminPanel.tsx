@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Plus, Trash2, Users, Settings } from 'lucide-react';
-import { Team, Game } from '@/pages/Index';
+import { Lock, Plus, Trash2, Users, Settings, Edit } from 'lucide-react';
+import { Team, Game, TournamentSettings } from '@/pages/Index';
 import { toast } from "@/hooks/use-toast";
+import GameSettings from './GameSettings';
 
 interface AdminPanelProps {
   teams: Team[];
@@ -18,20 +19,48 @@ interface AdminPanelProps {
   onGameUpdate: (games: Game[]) => void;
   isAuthenticated: boolean;
   onAuthChange: (authenticated: boolean) => void;
+  tournamentSettings: TournamentSettings;
+  onSettingsUpdate: (settings: TournamentSettings) => void;
+  onResetTournament: () => void;
 }
 
-const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated, onAuthChange }: AdminPanelProps) => {
+const AdminPanel = ({ 
+  teams, 
+  games, 
+  onTeamUpdate, 
+  onGameUpdate, 
+  isAuthenticated, 
+  onAuthChange,
+  tournamentSettings,
+  onSettingsUpdate,
+  onResetTournament
+}: AdminPanelProps) => {
   const [password, setPassword] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('A');
-  const [newField, setNewField] = useState('');
-  const [newTime, setNewTime] = useState('');
   const [selectedTeam1, setSelectedTeam1] = useState('');
   const [selectedTeam2, setSelectedTeam2] = useState('');
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editTeamGroup, setEditTeamGroup] = useState('');
 
   const ADMIN_PASSWORD = 'admin123';
-  const GROUPS = ['A', 'B', 'C', 'D'];
-  const FIELDS = ['Field 1', 'Field 2', 'Field 3', 'Field 4'];
+
+  const getGroupNames = () => {
+    const groups = [];
+    for (let i = 0; i < tournamentSettings.numberOfGroups; i++) {
+      groups.push(String.fromCharCode(65 + i)); // A, B, C, D, etc.
+    }
+    return groups;
+  };
+
+  const getCourtNames = () => {
+    const courts = [];
+    for (let i = 1; i <= tournamentSettings.numberOfCourts; i++) {
+      courts.push(`Court ${i}`);
+    }
+    return courts;
+  };
 
   const handleLogin = () => {
     if (password === ADMIN_PASSWORD) {
@@ -61,6 +90,8 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
       losses: 0,
       pointsFor: 0,
       pointsAgainst: 0,
+      setsWon: 0,
+      setsLost: 0,
     };
 
     onTeamUpdate([...teams, newTeam]);
@@ -71,11 +102,36 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
     });
   };
 
+  const startEditTeam = (team: Team) => {
+    setEditingTeam(team);
+    setEditTeamName(team.name);
+    setEditTeamGroup(team.group);
+  };
+
+  const saveEditTeam = () => {
+    if (!editingTeam || !editTeamName.trim()) return;
+
+    const updatedTeams = teams.map(team => 
+      team.id === editingTeam.id 
+        ? { ...team, name: editTeamName.trim(), group: editTeamGroup }
+        : team
+    );
+
+    onTeamUpdate(updatedTeams);
+    setEditingTeam(null);
+    setEditTeamName('');
+    setEditTeamGroup('');
+    
+    toast({
+      title: "Team Updated",
+      description: `Team has been successfully updated`,
+    });
+  };
+
   const removeTeam = (teamId: string) => {
     const updatedTeams = teams.filter(team => team.id !== teamId);
     onTeamUpdate(updatedTeams);
     
-    // Remove games involving this team
     const updatedGames = games.filter(game => 
       game.team1.id !== teamId && game.team2.id !== teamId
     );
@@ -87,97 +143,99 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
     });
   };
 
-  const createGame = () => {
-    if (!selectedTeam1 || !selectedTeam2 || !newField || !newTime) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all fields to create a game",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (selectedTeam1 === selectedTeam2) {
-      toast({
-        title: "Invalid Selection",
-        description: "Please select two different teams",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const team1 = teams.find(t => t.id === selectedTeam1);
-    const team2 = teams.find(t => t.id === selectedTeam2);
-
-    if (!team1 || !team2) return;
-
-    const newGame: Game = {
-      id: Date.now().toString(),
-      team1,
-      team2,
-      team1Score: 0,
-      team2Score: 0,
-      isComplete: false,
-      field: newField,
-      time: newTime,
-      phase: 'group',
-      group: team1.group === team2.group ? team1.group : undefined,
-    };
-
-    onGameUpdate([...games, newGame]);
-    setSelectedTeam1('');
-    setSelectedTeam2('');
-    setNewField('');
-    setNewTime('');
-    
-    toast({
-      title: "Game Created",
-      description: `${team1.name} vs ${team2.name} scheduled for ${newTime}`,
-    });
-  };
-
-  const generateGroupStageGames = () => {
+  const generateRoundRobin = () => {
     const newGames: Game[] = [];
     let gameId = Date.now();
+    const groups = getGroupNames();
+    const courts = getCourtNames();
 
-    GROUPS.forEach(group => {
+    groups.forEach(group => {
       const groupTeams = teams.filter(team => team.group === group);
       
-      // Generate round-robin for each group
+      if (groupTeams.length < 2) return;
+
       for (let i = 0; i < groupTeams.length; i++) {
         for (let j = i + 1; j < groupTeams.length; j++) {
-          const fieldIndex = newGames.length % FIELDS.length;
-          const timeSlot = Math.floor(newGames.length / FIELDS.length) + 9; // Start at 9 AM
+          const courtIndex = newGames.length % courts.length;
           
-          newGames.push({
+          const newGame: Game = {
             id: (gameId++).toString(),
             team1: groupTeams[i],
             team2: groupTeams[j],
-            team1Score: 0,
-            team2Score: 0,
+            sets: [{
+              team1Score: 0,
+              team2Score: 0,
+              isComplete: false
+            }],
+            currentSet: 0,
             isComplete: false,
-            field: FIELDS[fieldIndex],
-            time: `${timeSlot}:00`,
+            field: courts[courtIndex],
             phase: 'group',
             group: group,
-          });
+            isRunning: false,
+          };
+
+          if (tournamentSettings.winCondition === 'sets') {
+            newGame.sets = Array(tournamentSettings.numberOfSets).fill(null).map(() => ({
+              team1Score: 0,
+              team2Score: 0,
+              isComplete: false
+            }));
+          }
+
+          newGames.push(newGame);
         }
       }
     });
 
     onGameUpdate([...games, ...newGames]);
     toast({
-      title: "Group Stage Generated",
+      title: "Round Robin Generated",
       description: `${newGames.length} group stage games created`,
     });
   };
 
-  const resetTournament = () => {
-    onTeamUpdate([]);
+  const resetAllGroups = () => {
+    const resetTeams = teams.map(team => ({
+      ...team,
+      wins: 0,
+      losses: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+      setsWon: 0,
+      setsLost: 0,
+    }));
+
+    onTeamUpdate(resetTeams);
     onGameUpdate([]);
+    
     toast({
-      title: "Tournament Reset",
-      description: "All teams and games have been cleared",
+      title: "Groups Reset",
+      description: "All group statistics have been reset",
+    });
+  };
+
+  const startGame = (gameId: string) => {
+    const updatedGames = games.map(game =>
+      game.id === gameId ? { ...game, isRunning: true } : game
+    );
+    onGameUpdate(updatedGames);
+    
+    toast({
+      title: "Game Started",
+      description: "Game is now live and can be scored",
+    });
+  };
+
+  const stopGame = (gameId: string) => {
+    const updatedGames = games.map(game =>
+      game.id === gameId ? { ...game, isRunning: false } : game
+    );
+    onGameUpdate(updatedGames);
+    
+    toast({
+      title: "Game Stopped",
+      description: "Game is no longer live",
     });
   };
 
@@ -211,6 +269,9 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
     );
   }
 
+  const runningGames = games.filter(g => g.isRunning);
+  const pendingGames = games.filter(g => !g.isComplete && !g.isRunning);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -225,6 +286,12 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Tournament Settings */}
+        <GameSettings 
+          settings={tournamentSettings}
+          onSettingsUpdate={onSettingsUpdate}
+        />
+
         {/* Team Management */}
         <Card className="bg-white/90 backdrop-blur-sm">
           <CardHeader>
@@ -251,7 +318,7 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {GROUPS.map(group => (
+                    {getGroupNames().map(group => (
                       <SelectItem key={group} value={group}>Group {group}</SelectItem>
                     ))}
                   </SelectContent>
@@ -270,120 +337,190 @@ const AdminPanel = ({ teams, games, onTeamUpdate, onGameUpdate, isAuthenticated,
                     <Badge variant="outline">Group {team.group}</Badge>
                     <span className="font-medium">{team.name}</span>
                   </div>
-                  <Button
-                    onClick={() => removeTeam(team.id)}
-                    size="sm"
-                    variant="destructive"
-                  >
-                    <Trash2 size={14} />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => startEditTeam(team)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Edit size={14} />
+                    </Button>
+                    <Button
+                      onClick={() => removeTeam(team.id)}
+                      size="sm"
+                      variant="destructive"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {/* Game Management */}
+      {/* Game Management */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Running Games */}
         <Card className="bg-white/90 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="text-green-500" size={20} />
-              Game Management
-            </CardTitle>
+            <CardTitle className="text-green-600">Running Games</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Team 1</Label>
-                <Select value={selectedTeam1} onValueChange={setSelectedTeam1}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map(team => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name} (Group {team.group})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Team 2</Label>
-                <Select value={selectedTeam2} onValueChange={setSelectedTeam2}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map(team => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name} (Group {team.group})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Field</Label>
-                <Select value={newField} onValueChange={setNewField}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select field..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FIELDS.map(field => (
-                      <SelectItem key={field} value={field}>{field}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Time</Label>
-                <Input
-                  type="time"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <Button onClick={createGame} className="w-full bg-green-500 hover:bg-green-600">
-              <Plus size={16} className="mr-2" />
-              Create Game
-            </Button>
-
-            <div className="flex gap-2">
-              <Button 
-                onClick={generateGroupStageGames} 
-                className="flex-1 bg-purple-500 hover:bg-purple-600"
-                disabled={teams.length < 8}
-              >
-                Generate Group Stage
-              </Button>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="destructive" className="flex-1">
-                    Reset Tournament
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Confirm Reset</DialogTitle>
-                  </DialogHeader>
-                  <p>This will delete all teams and games. Are you sure?</p>
-                  <div className="flex gap-2 mt-4">
-                    <Button onClick={resetTournament} variant="destructive" className="flex-1">
-                      Yes, Reset Everything
+          <CardContent>
+            {runningGames.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No games currently running</p>
+            ) : (
+              <div className="space-y-2">
+                {runningGames.map(game => (
+                  <div key={game.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                    <div>
+                      <div className="font-medium">{game.team1.name} vs {game.team2.name}</div>
+                      <div className="text-sm text-gray-600">{game.field}</div>
+                    </div>
+                    <Button
+                      onClick={() => stopGame(game.id)}
+                      size="sm"
+                      variant="outline"
+                      className="border-red-300 text-red-600"
+                    >
+                      Stop
                     </Button>
                   </div>
-                </DialogContent>
-              </Dialog>
-            </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Pending Games */}
+        <Card className="bg-white/90 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-orange-600">Pending Games</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pendingGames.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No pending games</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {pendingGames.slice(0, 5).map(game => (
+                  <div key={game.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                    <div>
+                      <div className="font-medium">{game.team1.name} vs {game.team2.name}</div>
+                      <div className="text-sm text-gray-600">{game.field}</div>
+                    </div>
+                    <Button
+                      onClick={() => startGame(game.id)}
+                      size="sm"
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      Start
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card className="bg-white/90 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 flex-wrap">
+            <Button 
+              onClick={generateRoundRobin} 
+              className="bg-purple-500 hover:bg-purple-600"
+              disabled={teams.length < 4}
+            >
+              Generate Round Robin
+            </Button>
+            
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="border-yellow-300 text-yellow-600">
+                  Reset All Groups
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Reset All Groups</DialogTitle>
+                </DialogHeader>
+                <p>This will reset all team statistics but keep teams and settings. Continue?</p>
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={resetAllGroups} className="flex-1 bg-yellow-500 hover:bg-yellow-600">
+                    Yes, Reset Groups
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="destructive">
+                  Reset Tournament
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Reset Entire Tournament</DialogTitle>
+                </DialogHeader>
+                <p>This will delete all teams, games, and reset to default settings. Are you sure?</p>
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={onResetTournament} variant="destructive" className="flex-1">
+                    Yes, Reset Everything
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Edit Team Dialog */}
+      {editingTeam && (
+        <Dialog open={!!editingTeam} onOpenChange={() => setEditingTeam(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Team</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Team Name</Label>
+                <Input
+                  value={editTeamName}
+                  onChange={(e) => setEditTeamName(e.target.value)}
+                  placeholder="Enter team name..."
+                />
+              </div>
+              <div>
+                <Label>Group</Label>
+                <Select value={editTeamGroup} onValueChange={setEditTeamGroup}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getGroupNames().map(group => (
+                      <SelectItem key={group} value={group}>Group {group}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={saveEditTeam} className="flex-1">
+                  Save Changes
+                </Button>
+                <Button onClick={() => setEditingTeam(null)} variant="outline" className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

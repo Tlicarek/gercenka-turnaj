@@ -2,21 +2,29 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Medal, Award } from 'lucide-react';
+import { Trophy, Medal, Users } from 'lucide-react';
 import { Team } from '@/pages/Index';
 
 interface GroupStandingsProps {
   teams: Team[];
+  numberOfGroups: number;
 }
 
-const GroupStandings = ({ teams }: GroupStandingsProps) => {
-  const groups = ['A', 'B', 'C', 'D'];
+const GroupStandings = ({ teams, numberOfGroups }: GroupStandingsProps) => {
+  const getGroupNames = () => {
+    const groups = [];
+    for (let i = 0; i < numberOfGroups; i++) {
+      groups.push(String.fromCharCode(65 + i)); // A, B, C, D, etc.
+    }
+    return groups;
+  };
+
+  const groups = getGroupNames();
 
   const getGroupStandings = (group: string) => {
     return teams
       .filter(team => team.group === group)
       .sort((a, b) => {
-        // Sort by wins first, then by point difference
         if (a.wins !== b.wins) return b.wins - a.wins;
         const aPointDiff = a.pointsFor - a.pointsAgainst;
         const bPointDiff = b.pointsFor - b.pointsAgainst;
@@ -29,7 +37,6 @@ const GroupStandings = ({ teams }: GroupStandingsProps) => {
     switch (position) {
       case 1: return <Trophy className="text-yellow-500" size={20} />;
       case 2: return <Medal className="text-gray-400" size={20} />;
-      case 3: return <Award className="text-orange-600" size={20} />;
       default: return null;
     }
   };
@@ -49,7 +56,7 @@ const GroupStandings = ({ teams }: GroupStandingsProps) => {
         <p className="text-gray-600">Current tournament rankings by group</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 ${numberOfGroups <= 2 ? 'md:grid-cols-2' : numberOfGroups <= 4 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3 lg:grid-cols-4'} gap-6`}>
         {groups.map(group => {
           const groupTeams = getGroupStandings(group);
           
@@ -111,10 +118,9 @@ const GroupStandings = ({ teams }: GroupStandingsProps) => {
                       );
                     })}
 
-                    {/* Stats Summary */}
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div className="text-sm text-blue-700 font-medium mb-2">Group Statistics</div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="grid grid-cols-1 gap-2 text-sm">
                         <div>
                           <span className="text-gray-600">Teams:</span>
                           <span className="ml-2 font-medium">{groupTeams.length}</span>
@@ -123,7 +129,7 @@ const GroupStandings = ({ teams }: GroupStandingsProps) => {
                           <span className="text-gray-600">Games Played:</span>
                           <span className="ml-2 font-medium">{groupTeams.reduce((sum, team) => sum + team.wins + team.losses, 0) / 2}</span>
                         </div>
-                        <div className="col-span-2">
+                        <div>
                           <span className="text-gray-600">Top 2 advance to knockouts</span>
                         </div>
                       </div>
@@ -144,10 +150,12 @@ const GroupStandings = ({ teams }: GroupStandingsProps) => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div className="p-3 bg-white/80 rounded-lg">
+              <Users className="mx-auto mb-2 text-blue-600" size={24} />
               <div className="text-2xl font-bold text-blue-600">{teams.length}</div>
               <div className="text-sm text-gray-600">Total Teams</div>
             </div>
             <div className="p-3 bg-white/80 rounded-lg">
+              <Trophy className="mx-auto mb-2 text-green-600" size={24} />
               <div className="text-2xl font-bold text-green-600">
                 {teams.reduce((sum, team) => sum + team.wins, 0)}
               </div>

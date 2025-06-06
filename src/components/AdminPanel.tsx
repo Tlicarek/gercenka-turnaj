@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ interface AdminPanelProps {
   onResetTournament: () => void;
   currentPhase: 'group' | 'quarterfinal' | 'semifinal' | 'final';
   onPhaseChange: (phase: 'group' | 'quarterfinal' | 'semifinal' | 'final') => void;
+  generateRoundRobinGames: () => Promise<boolean>;
 }
 
 const AdminPanel = ({ 

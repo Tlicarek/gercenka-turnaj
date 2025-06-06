@@ -54,6 +54,19 @@ const GameSettings = ({ settings, onSettingsUpdate }: GameSettingsProps) => {
         </div>
 
         <div>
+          <Label>Teams Advancing from Each Group</Label>
+          <Select value={settings.teamsAdvancingFromGroup.toString()} onValueChange={(value) => updateSetting('teamsAdvancingFromGroup', parseInt(value) as 1 | 2)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1 team per group (4-team knockout)</SelectItem>
+              <SelectItem value="2">2 teams per group (8-team knockout)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
           <Label>Win Condition</Label>
           <Select value={settings.winCondition} onValueChange={(value: 'points' | 'time' | 'sets') => updateSetting('winCondition', value)}>
             <SelectTrigger>
@@ -124,6 +137,18 @@ const GameSettings = ({ settings, onSettingsUpdate }: GameSettingsProps) => {
             </div>
           </div>
         )}
+
+        <div>
+          <Label>Auto-Start Delay (minutes)</Label>
+          <Input
+            type="number"
+            min="0"
+            max="60"
+            value={settings.autoStartDelay || 0}
+            onChange={(e) => updateSetting('autoStartDelay', parseInt(e.target.value) || 0)}
+            placeholder="0 = manual start only"
+          />
+        </div>
 
         <div>
           <Label>Admin Password</Label>

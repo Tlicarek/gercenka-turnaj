@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import FieldSchedule from '@/components/FieldSchedule';
 import PublicTVMode from '@/components/PublicTVMode';
 import { Trophy, Users, Calendar, Target, Tv } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useTournamentData } from '@/hooks/useTournamentData';
 
 export interface Team {
   id: string;
@@ -58,81 +60,62 @@ export interface TournamentSettings {
   pointsToWinSet: number; // Points needed to win each set
   adminPassword: string;
   teamsAdvancingFromGroup: 1 | 2; // New setting for advancement
+  autoStartDelay?: number; // Auto-start delay in minutes
 }
 
 const Index = () => {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
+  const {
+    teams,
+    games,
+    tournamentSettings,
+    setTeams,
+    setGames,
+    setTournamentSettings,
+    saveTeam,
+    saveGame,
+    saveTournamentSettings,
+    generateRoundRobinGames,
+    deleteTeam,
+    deleteGame,
+    resetTournament,
+    loadTeams,
+    loadGames,
+  } = useTournamentData();
+
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<'group' | 'quarterfinal' | 'semifinal' | 'final'>('group');
-  const [tournamentSettings, setTournamentSettings] = useState<TournamentSettings>({
-    numberOfCourts: 4,
-    numberOfGroups: 4,
-    winCondition: 'points',
-    pointsToWin: 15,
-    timeLimit: 20,
-    numberOfSets: 1,
-    setsToWin: 1,
-    pointsToWinSet: 25,
-    adminPassword: 'admin123',
-    teamsAdvancingFromGroup: 2,
-  });
 
   const isMobile = useIsMobile();
 
-  const handleTeamUpdate = (updatedTeams: Team[]) => {
+  const handleTeamUpdate = async (updatedTeams: Team[]) => {
     setTeams(updatedTeams);
+    // Save all updated teams to database
+    for (const team of updatedTeams) {
+      await saveTeam(team);
+    }
+    await loadTeams(); // Reload to ensure consistency
   };
 
-  const handleGameUpdate = (updatedGames: Game[]) => {
+  const handleGameUpdate = async (updatedGames: Game[]) => {
     setGames(updatedGames);
+    // Save all updated games to database
+    for (const game of updatedGames) {
+      await saveGame(game);
+    }
+    // Also update team stats
+    for (const team of teams) {
+      await saveTeam(team);
+    }
+    await loadGames(); // Reload to ensure consistency
   };
 
-  const handleSettingsUpdate = (newSettings: TournamentSettings) => {
+  const handleSettingsUpdate = async (newSettings: TournamentSettings) => {
     setTournamentSettings(newSettings);
+    await saveTournamentSettings(newSettings);
   };
 
-  const generateGroupStageGames = () => {
-    const groups = Array.from({length: tournamentSettings.numberOfGroups}, (_, i) => String.fromCharCode(65 + i));
-    const newGames: Game[] = [];
-    let gameId = Date.now();
-
-    groups.forEach(groupLetter => {
-      const groupTeams = teams.filter(team => team.group === groupLetter);
-      
-      // Generate round-robin matches for each group
-      for (let i = 0; i < groupTeams.length; i++) {
-        for (let j = i + 1; j < groupTeams.length; j++) {
-          const game: Game = {
-            id: (gameId++).toString(),
-            team1: groupTeams[i],
-            team2: groupTeams[j],
-            sets: Array.from({length: tournamentSettings.numberOfSets}, () => ({
-              team1Score: 0,
-              team2Score: 0,
-              isComplete: false
-            })),
-            currentSet: 0,
-            isComplete: false,
-            field: `Court ${((newGames.length) % tournamentSettings.numberOfCourts) + 1}`,
-            phase: 'group',
-            group: groupLetter,
-            isRunning: false,
-            team1Score: 0,
-            team2Score: 0,
-            time: '00:00'
-          };
-          newGames.push(game);
-        }
-      }
-    });
-
-    setGames(newGames);
-  };
-
-  const resetTournament = () => {
-    setTeams([]);
-    setGames([]);
+  const handleResetTournament = async () => {
+    await resetTournament();
     setCurrentPhase('group');
   };
 
@@ -264,9 +247,10 @@ const Index = () => {
               onAuthChange={setIsAdminAuthenticated}
               tournamentSettings={tournamentSettings}
               onSettingsUpdate={handleSettingsUpdate}
-              onResetTournament={resetTournament}
+              onResetTournament={handleResetTournament}
               currentPhase={currentPhase}
               onPhaseChange={setCurrentPhase}
+              onGenerateGroupStage={generateRoundRobinGames}
             />
           </TabsContent>
         </Tabs>

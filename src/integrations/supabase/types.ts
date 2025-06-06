@@ -9,13 +9,190 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      games: {
+        Row: {
+          auto_start_delay: number | null
+          created_at: string
+          current_set: number
+          field: string
+          group_letter: string | null
+          id: string
+          is_complete: boolean
+          is_running: boolean
+          phase: string
+          sets: Json
+          start_time: string | null
+          team1_id: string | null
+          team1_score: number
+          team2_id: string | null
+          team2_score: number
+          winner_id: string | null
+        }
+        Insert: {
+          auto_start_delay?: number | null
+          created_at?: string
+          current_set?: number
+          field: string
+          group_letter?: string | null
+          id?: string
+          is_complete?: boolean
+          is_running?: boolean
+          phase: string
+          sets?: Json
+          start_time?: string | null
+          team1_id?: string | null
+          team1_score?: number
+          team2_id?: string | null
+          team2_score?: number
+          winner_id?: string | null
+        }
+        Update: {
+          auto_start_delay?: number | null
+          created_at?: string
+          current_set?: number
+          field?: string
+          group_letter?: string | null
+          id?: string
+          is_complete?: boolean
+          is_running?: boolean
+          phase?: string
+          sets?: Json
+          start_time?: string | null
+          team1_id?: string | null
+          team1_score?: number
+          team2_id?: string | null
+          team2_score?: number
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_team1_id_fkey"
+            columns: ["team1_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_team2_id_fkey"
+            columns: ["team2_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          group_letter: string
+          id: string
+          losses: number
+          name: string
+          points_against: number
+          points_for: number
+          sets_lost: number
+          sets_won: number
+          wins: number
+        }
+        Insert: {
+          created_at?: string
+          group_letter: string
+          id?: string
+          losses?: number
+          name: string
+          points_against?: number
+          points_for?: number
+          sets_lost?: number
+          sets_won?: number
+          wins?: number
+        }
+        Update: {
+          created_at?: string
+          group_letter?: string
+          id?: string
+          losses?: number
+          name?: string
+          points_against?: number
+          points_for?: number
+          sets_lost?: number
+          sets_won?: number
+          wins?: number
+        }
+        Relationships: []
+      }
+      tournament_settings: {
+        Row: {
+          admin_password: string
+          auto_start_delay: number
+          created_at: string
+          current_phase: string
+          id: string
+          is_active: boolean
+          number_of_courts: number
+          number_of_groups: number
+          number_of_sets: number
+          points_to_win: number
+          points_to_win_set: number
+          sets_to_win: number
+          teams_advancing_from_group: number
+          time_limit: number
+          updated_at: string
+          win_condition: string
+        }
+        Insert: {
+          admin_password?: string
+          auto_start_delay?: number
+          created_at?: string
+          current_phase?: string
+          id?: string
+          is_active?: boolean
+          number_of_courts?: number
+          number_of_groups?: number
+          number_of_sets?: number
+          points_to_win?: number
+          points_to_win_set?: number
+          sets_to_win?: number
+          teams_advancing_from_group?: number
+          time_limit?: number
+          updated_at?: string
+          win_condition?: string
+        }
+        Update: {
+          admin_password?: string
+          auto_start_delay?: number
+          created_at?: string
+          current_phase?: string
+          id?: string
+          is_active?: boolean
+          number_of_courts?: number
+          number_of_groups?: number
+          number_of_sets?: number
+          points_to_win?: number
+          points_to_win_set?: number
+          sets_to_win?: number
+          teams_advancing_from_group?: number
+          time_limit?: number
+          updated_at?: string
+          win_condition?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_round_robin_for_group: {
+        Args: { group_letter: string; court_offset?: number }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

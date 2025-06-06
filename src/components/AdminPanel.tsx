@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +37,8 @@ const AdminPanel = ({
   onSettingsUpdate,
   onResetTournament,
   currentPhase,
-  onPhaseChange
+  onPhaseChange,
+  generateRoundRobinGames
 }: AdminPanelProps) => {
   const [password, setPassword] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
@@ -48,6 +48,10 @@ const AdminPanel = ({
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editTeamName, setEditTeamName] = useState('');
   const [editTeamGroup, setEditTeamGroup] = useState('');
+
+  const generateUUID = () => {
+    return crypto.randomUUID();
+  };
 
   const getGroupNames = () => {
     const groups = [];
@@ -86,7 +90,7 @@ const AdminPanel = ({
     if (!newTeamName.trim()) return;
     
     const newTeam: Team = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       name: newTeamName.trim(),
       group: selectedGroup,
       wins: 0,
@@ -148,7 +152,7 @@ const AdminPanel = ({
 
   const generateRoundRobin = () => {
     const newGames: Game[] = [];
-    let gameId = Date.now();
+    let gameIdCounter = 0;
     const groups = getGroupNames();
     const courts = getCourtNames();
 
@@ -162,7 +166,7 @@ const AdminPanel = ({
           const courtIndex = newGames.length % courts.length;
           
           const newGame: Game = {
-            id: (gameId++).toString(),
+            id: generateUUID(),
             team1: groupTeams[i],
             team2: groupTeams[j],
             sets: [{
@@ -288,7 +292,7 @@ const AdminPanel = ({
     // Pad with dummy teams if needed for bracket structure
     while (qualifiedTeams.length < 8) {
       qualifiedTeams.push({
-        id: `dummy-${qualifiedTeams.length}`,
+        id: generateUUID(),
         name: `TBD ${qualifiedTeams.length + 1}`,
         group: '',
         wins: 0,
@@ -301,7 +305,6 @@ const AdminPanel = ({
     }
 
     const newGames: Game[] = [];
-    let gameId = Date.now();
     const courts = getCourtNames();
 
     // Generate Quarterfinals
@@ -316,7 +319,7 @@ const AdminPanel = ({
       const courtIndex = index % courts.length;
       
       const newGame: Game = {
-        id: (gameId++).toString(),
+        id: generateUUID(),
         team1: matchup[0],
         team2: matchup[1],
         sets: [{
@@ -348,7 +351,7 @@ const AdminPanel = ({
     // Generate placeholder Semifinals
     for (let i = 0; i < 2; i++) {
       const newGame: Game = {
-        id: (gameId++).toString(),
+        id: generateUUID(),
         team1: { id: '', name: `QF Winner ${i * 2 + 1}`, group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
         team2: { id: '', name: `QF Winner ${i * 2 + 2}`, group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
         sets: [{
@@ -379,7 +382,7 @@ const AdminPanel = ({
 
     // Generate placeholder Final
     const finalGame: Game = {
-      id: (gameId++).toString(),
+      id: generateUUID(),
       team1: { id: '', name: 'SF Winner 1', group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
       team2: { id: '', name: 'SF Winner 2', group: '', wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0 },
       sets: [{
@@ -466,7 +469,7 @@ const AdminPanel = ({
     const courtIndex = games.length % courts.length;
 
     const newGame: Game = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       team1,
       team2,
       sets: [{

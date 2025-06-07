@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +33,6 @@ const ScoreBoard = ({
   const [editTeam1Score, setEditTeam1Score] = useState(0);
   const [editTeam2Score, setEditTeam2Score] = useState(0);
   const [selectedField, setSelectedField] = useState<string>('all');
-  
-  // More robust debouncing mechanism
-  const lastUpdateTime = useRef<Map<string, number>>(new Map());
-  const updateTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const DEBOUNCE_DELAY = 500; // Increased to 500ms
-  
   const isMobile = useIsMobile();
 
   // Get unique fields from games
@@ -47,144 +41,84 @@ const ScoreBoard = ({
   // Filter games based on selected field
   const filteredGames = selectedField === 'all' ? games : games.filter(game => game.field === selectedField);
 
-  const updateScore = async (gameId: string, team: 'team1' | 'team2', change: number) => {
-    const now = Date.now();
-    const lastUpdate = lastUpdateTime.current.get(gameId) || 0;
-    
-    // Strict debouncing - prevent any updates within the debounce window
-    if (now - lastUpdate < DEBOUNCE_DELAY) {
-      console.log('Update blocked - too soon after last update:', gameId);
-      return;
-    }
+  const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
+    const updatedGames = games.map(game => {
+      if (game.id === gameId && !game.isComplete && game.isRunning) {
+        const currentSet = game.sets[game.currentSet];
+        if (!currentSet || currentSet.isComplete) return game;
 
-    // Clear any pending timeout for this game
-    const existingTimeout = updateTimeouts.current.get(gameId);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
+        const newScore = Math.max(0, currentSet[`${team}Score`] + change);
+        const otherTeamScore = team === 'team1' ? currentSet.team2Score : currentSet.team1Score;
+        
+        let isSetComplete = false;
+        let isGameComplete = false;
+        let newCurrentSet = game.currentSet;
 
-    // Set the last update time immediately
-    lastUpdateTime.current.set(gameId, now);
-
-    // Set a timeout to allow future updates
-    const timeout = setTimeout(() => {
-      lastUpdateTime.current.delete(gameId);
-      updateTimeouts.current.delete(gameId);
-    }, DEBOUNCE_DELAY);
-    
-    updateTimeouts.current.set(gameId, timeout);
-
-    try {
-      const game = games.find(g => g.id === gameId);
-      if (!game || !game.isRunning || game.isComplete) {
-        console.log('Game not found, not running, or already complete:', gameId);
-        return;
-      }
-
-      const currentSet = game.sets[game.currentSet];
-      if (!currentSet || currentSet.isComplete) {
-        console.log('Current set not found or already complete');
-        return;
-      }
-
-      const currentScore = currentSet[`${team}Score`];
-      const newScore = Math.max(0, currentScore + change);
-      
-      // Prevent unnecessary updates
-      if (newScore === currentScore) {
-        console.log('Score unchanged, skipping update');
-        return;
-      }
-
-      const otherTeam = team === 'team1' ? 'team2' : 'team1';
-      const otherTeamScore = currentSet[`${otherTeam}Score`];
-      
-      let isSetComplete = false;
-      let isGameComplete = false;
-      let newCurrentSet = game.currentSet;
-
-      // Check win conditions
-      if (tournamentSettings.winCondition === 'points') {
-        isSetComplete = newScore >= tournamentSettings.pointsToWin && Math.abs(newScore - otherTeamScore) >= 2;
-      } else if (tournamentSettings.winCondition === 'sets') {
-        isSetComplete = newScore >= tournamentSettings.pointsToWinSet && Math.abs(newScore - otherTeamScore) >= 2;
-      }
-
-      // Create updated sets array
-      const updatedSets = game.sets.map((set, index) => {
-        if (index === game.currentSet) {
-          return {
-            ...set,
-            [`${team}Score`]: newScore,
-            isComplete: isSetComplete
-          };
+        // Check win conditions
+        if (tournamentSettings.winCondition === 'points') {
+          isSetComplete = newScore >= tournamentSettings.pointsToWin;
+        } else if (tournamentSettings.winCondition === 'sets') {
+          isSetComplete = newScore >= tournamentSettings.pointsToWinSet || (newScore >= 15 && Math.abs(newScore - otherTeamScore) >= 2);
         }
-        return set;
-      });
 
-      // Check if we need to start a new set or complete the game
-      if (isSetComplete && tournamentSettings.winCondition === 'sets') {
-        const team1SetsWon = updatedSets.filter(set => set.isComplete && set.team1Score > set.team2Score).length;
-        const team2SetsWon = updatedSets.filter(set => set.isComplete && set.team2Score > set.team1Score).length;
-        
-        if (team1SetsWon >= tournamentSettings.setsToWin || team2SetsWon >= tournamentSettings.setsToWin) {
-          isGameComplete = true;
-        } else if (newCurrentSet + 1 < tournamentSettings.numberOfSets) {
-          newCurrentSet = newCurrentSet + 1;
-        }
-      } else if (isSetComplete && tournamentSettings.winCondition === 'points') {
-        isGameComplete = true;
-      }
-
-      // Create the updated game object
-      const updatedGame: Game = {
-        ...game,
-        sets: updatedSets,
-        currentSet: newCurrentSet,
-        isComplete: isGameComplete,
-        isRunning: !isGameComplete,
-        winner: isGameComplete ? (team === 'team1' ? game.team1 : game.team2) : undefined,
-        team1Score: updatedSets[0]?.team1Score || 0,
-        team2Score: updatedSets[0]?.team2Score || 0
-      };
-
-      // Update the games array
-      const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
-      onGameUpdate(updatedGames);
-
-      // Handle game completion
-      if (isGameComplete) {
-        const winningTeam = team === 'team1' ? game.team1 : game.team2;
-        const losingTeam = team === 'team1' ? game.team2 : game.team1;
-        
-        updateTeamStats(winningTeam.id, losingTeam.id, newScore, otherTeamScore, updatedSets);
-        
-        toast({
-          title: "Game Complete!",
-          description: `${winningTeam.name} wins!`,
+        const updatedSets = game.sets.map((set, index) => {
+          if (index === game.currentSet) {
+            return {
+              ...set,
+              [`${team}Score`]: newScore,
+              isComplete: isSetComplete
+            };
+          }
+          return set;
         });
 
-        // Auto-start next game on the same field after a delay
-        setTimeout(() => {
-          autoStartNextGame(game.field);
-        }, 3000);
+        // Check if we need to start a new set or complete the game
+        if (isSetComplete && tournamentSettings.winCondition === 'sets') {
+          const team1SetsWon = updatedSets.filter(set => set.isComplete && set.team1Score > set.team2Score).length;
+          const team2SetsWon = updatedSets.filter(set => set.isComplete && set.team2Score > set.team1Score).length;
+          
+          if (team1SetsWon >= tournamentSettings.setsToWin || team2SetsWon >= tournamentSettings.setsToWin) {
+            isGameComplete = true;
+          } else if (newCurrentSet + 1 < tournamentSettings.numberOfSets) {
+            newCurrentSet = newCurrentSet + 1;
+          }
+        } else if (isSetComplete && tournamentSettings.winCondition === 'points') {
+          isGameComplete = true;
+        }
+
+        if (isGameComplete) {
+          const winningTeam = team === 'team1' ? game.team1 : game.team2;
+          const losingTeam = team === 'team1' ? game.team2 : game.team1;
+          
+          updateTeamStats(winningTeam.id, losingTeam.id, newScore, otherTeamScore, updatedSets);
+          
+          toast({
+            title: "Game Complete!",
+            description: `${winningTeam.name} wins!`,
+          });
+
+          // Auto-start next game on the same field after a delay
+          setTimeout(() => {
+            autoStartNextGame(game.field);
+          }, 3000);
+        }
+        
+        return {
+          ...game,
+          sets: updatedSets,
+          currentSet: newCurrentSet,
+          isComplete: isGameComplete,
+          isRunning: isGameComplete ? false : game.isRunning,
+          winner: isGameComplete ? (team === 'team1' ? game.team1 : game.team2) : undefined,
+          team1Score: updatedSets[0]?.team1Score || 0,
+          team2Score: updatedSets[0]?.team2Score || 0
+        };
       }
-
-      checkPhaseProgression(updatedGames);
-    } catch (error) {
-      console.error('Error updating score:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update score. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Check if a game is currently being debounced
-  const isGameDebounced = (gameId: string) => {
-    const lastUpdate = lastUpdateTime.current.get(gameId) || 0;
-    return Date.now() - lastUpdate < DEBOUNCE_DELAY;
+      return game;
+    });
+    
+    onGameUpdate(updatedGames);
+    checkPhaseProgression(updatedGames);
   };
 
   const autoStartNextGame = (field: string) => {
@@ -507,7 +441,6 @@ const ScoreBoard = ({
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-4 sm:gap-6`}>
             {runningGames.map(game => {
               const currentSet = game.sets[game.currentSet] || { team1Score: 0, team2Score: 0, isComplete: false };
-              const isDebounced = isGameDebounced(game.id);
               
               return (
                 <Card key={game.id} className="bg-white/90 backdrop-blur-sm border-2 border-green-400">
@@ -551,7 +484,7 @@ const ScoreBoard = ({
                           size="sm"
                           variant="outline"
                           onClick={() => updateScore(game.id, 'team1', -1)}
-                          disabled={currentSet.team1Score === 0 || isDebounced}
+                          disabled={currentSet.team1Score === 0}
                           className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
                           <Minus size={isMobile ? 12 : 16} />
@@ -562,8 +495,7 @@ const ScoreBoard = ({
                         <Button
                           size="sm"
                           onClick={() => updateScore(game.id, 'team1', 1)}
-                          disabled={isDebounced}
-                          className={`bg-blue-500 hover:bg-blue-600 ${isMobile ? 'h-7 w-7 p-0' : ''} ${isDebounced ? 'opacity-50' : ''}`}
+                          className={`bg-blue-500 hover:bg-blue-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
                         >
                           <Plus size={isMobile ? 12 : 16} />
                         </Button>
@@ -584,7 +516,7 @@ const ScoreBoard = ({
                           size="sm"
                           variant="outline"
                           onClick={() => updateScore(game.id, 'team2', -1)}
-                          disabled={currentSet.team2Score === 0 || isDebounced}
+                          disabled={currentSet.team2Score === 0}
                           className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
                           <Minus size={isMobile ? 12 : 16} />
@@ -595,8 +527,7 @@ const ScoreBoard = ({
                         <Button
                           size="sm"
                           onClick={() => updateScore(game.id, 'team2', 1)}
-                          disabled={isDebounced}
-                          className={`bg-orange-500 hover:bg-orange-600 ${isMobile ? 'h-7 w-7 p-0' : ''} ${isDebounced ? 'opacity-50' : ''}`}
+                          className={`bg-orange-500 hover:bg-orange-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
                         >
                           <Plus size={isMobile ? 12 : 16} />
                         </Button>

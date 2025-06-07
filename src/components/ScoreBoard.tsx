@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Team, Game, TournamentSettings } from '@/pages/Index';
-import { Plus, Minus, Trophy, Clock, Edit, Trash2, Play } from 'lucide-react';
+import { Plus, Minus, Trophy, Clock, Edit, Trash2, Play, MapPin } from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -31,7 +32,14 @@ const ScoreBoard = ({
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editTeam1Score, setEditTeam1Score] = useState(0);
   const [editTeam2Score, setEditTeam2Score] = useState(0);
+  const [selectedField, setSelectedField] = useState<string>('all');
   const isMobile = useIsMobile();
+
+  // Get unique fields from games
+  const uniqueFields = [...new Set(games.map(g => g.field))].sort();
+
+  // Filter games based on selected field
+  const filteredGames = selectedField === 'all' ? games : games.filter(game => game.field === selectedField);
 
   const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
     const updatedGames = games.map(game => {
@@ -368,9 +376,9 @@ const ScoreBoard = ({
     });
   };
 
-  const runningGames = games.filter(g => g.isRunning);
-  const completedGames = games.filter(g => g.isComplete);
-  const pendingGames = games.filter(g => !g.isComplete && !g.isRunning);
+  const runningGames = filteredGames.filter(g => g.isRunning);
+  const completedGames = filteredGames.filter(g => g.isComplete);
+  const pendingGames = filteredGames.filter(g => !g.isComplete && !g.isRunning);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -381,12 +389,54 @@ const ScoreBoard = ({
         </Badge>
       </div>
 
+      {/* Field Filter */}
+      <Card className="bg-white/90 backdrop-blur-sm">
+        <CardHeader className={`${isMobile ? 'pb-2 px-3 pt-3' : 'pb-3'}`}>
+          <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'} flex items-center gap-2`}>
+            <MapPin className="text-blue-500" size={isMobile ? 20 : 24} />
+            Field Filter
+          </CardTitle>
+        </CardHeader>
+        <CardContent className={`${isMobile ? 'px-3 pb-3' : ''}`}>
+          <div className="flex items-center gap-3">
+            <Select value={selectedField} onValueChange={setSelectedField}>
+              <SelectTrigger className={`${isMobile ? 'w-full' : 'w-48'}`}>
+                <SelectValue placeholder="Select field" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Fields</SelectItem>
+                {uniqueFields.map(field => (
+                  <SelectItem key={field} value={field}>
+                    {field}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedField !== 'all' && (
+              <Badge variant="outline" className="text-xs">
+                Showing: {selectedField}
+              </Badge>
+            )}
+          </div>
+          {selectedField !== 'all' && (
+            <div className={`mt-2 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>
+              Only games from {selectedField} are shown. This prevents accidental score updates on other fields.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Running Games */}
       {runningGames.length > 0 && (
         <div>
           <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold mb-3 sm:mb-4 flex items-center gap-2`}>
             <Clock className="text-green-500" size={isMobile ? 20 : 24} />
             Live Games {!isMobile && '(Admin Can Edit)'}
+            {selectedField !== 'all' && (
+              <Badge variant="outline" className="text-xs">
+                {selectedField}
+              </Badge>
+            )}
           </h3>
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-4 sm:gap-6`}>
             {runningGames.map(game => {
@@ -512,6 +562,11 @@ const ScoreBoard = ({
           <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold mb-3 sm:mb-4 flex items-center gap-2`}>
             <Clock className="text-orange-500" size={isMobile ? 20 : 24} />
             Pending Games
+            {selectedField !== 'all' && (
+              <Badge variant="outline" className="text-xs">
+                {selectedField}
+              </Badge>
+            )}
           </h3>
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-4 sm:gap-6`}>
             {pendingGames.map(game => (
@@ -570,6 +625,11 @@ const ScoreBoard = ({
           <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold mb-3 sm:mb-4 flex items-center gap-2`}>
             <Trophy className="text-yellow-500" size={isMobile ? 20 : 24} />
             Completed Games
+            {selectedField !== 'all' && (
+              <Badge variant="outline" className="text-xs">
+                {selectedField}
+              </Badge>
+            )}
           </h3>
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'} gap-3 sm:gap-4`}>
             {completedGames.slice(-6).map(game => {
@@ -636,7 +696,10 @@ const ScoreBoard = ({
         <Card className="bg-white/90 backdrop-blur-sm">
           <CardContent className={`${isMobile ? 'p-6' : 'p-8'} text-center`}>
             <div className={`text-gray-500 ${isMobile ? 'text-base' : 'text-lg'}`}>
-              No games available. Use the Admin Panel to create and start games.
+              {selectedField === 'all' 
+                ? "No games available. Use the Admin Panel to create and start games."
+                : `No games available for ${selectedField}. Select "All Fields" or use the Admin Panel to create games.`
+              }
             </div>
           </CardContent>
         </Card>

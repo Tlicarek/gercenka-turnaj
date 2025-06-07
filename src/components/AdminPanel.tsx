@@ -26,12 +26,12 @@ interface AdminPanelProps {
   generateRoundRobinGames: () => Promise<boolean>;
 }
 
-const AdminPanel = ({ 
-  teams, 
-  games, 
-  onTeamUpdate, 
-  onGameUpdate, 
-  isAuthenticated, 
+const AdminPanel = ({
+  teams,
+  games,
+  onTeamUpdate,
+  onGameUpdate,
+  isAuthenticated,
   onAuthChange,
   tournamentSettings,
   onSettingsUpdate,
@@ -152,56 +152,49 @@ const AdminPanel = ({
 
   const generateRoundRobin = () => {
     const newGames: Game[] = [];
-    let gameIdCounter = 0;
     const groups = getGroupNames();
     const courts = getCourtNames();
 
     groups.forEach(group => {
       const groupTeams = teams.filter(team => team.group === group);
       
-      if (groupTeams.length < 2) return;
-
+      // Generate all possible pairings (including reverse matchups)
       for (let i = 0; i < groupTeams.length; i++) {
-        for (let j = i + 1; j < groupTeams.length; j++) {
-          const courtIndex = newGames.length % courts.length;
-          
-          const newGame: Game = {
-            id: generateUUID(),
-            team1: groupTeams[i],
-            team2: groupTeams[j],
-            sets: [{
+        for (let j = 0; j < groupTeams.length; j++) {
+          if (i !== j) { // Don't match a team against itself
+            const courtIndex = newGames.length % courts.length;
+            
+            const newGame: Game = {
+              id: generateUUID(),
+              team1: groupTeams[i],
+              team2: groupTeams[j],
+              sets: [{
+                team1Score: 0,
+                team2Score: 0,
+                isComplete: false
+              }],
+              currentSet: 0,
+              isComplete: false,
+              field: courts[courtIndex],
+              phase: 'group' as const,
+              group: group,
+              isRunning: false,
               team1Score: 0,
               team2Score: 0,
-              isComplete: false
-            }],
-            currentSet: 0,
-            isComplete: false,
-            field: courts[courtIndex],
-            phase: 'group',
-            group: group,
-            isRunning: false,
-            team1Score: 0,
-            team2Score: 0,
-            time: '00:00',
-          };
-
-          if (tournamentSettings.winCondition === 'sets') {
-            newGame.sets = Array(tournamentSettings.numberOfSets).fill(null).map(() => ({
-              team1Score: 0,
-              team2Score: 0,
-              isComplete: false
-            }));
+              time: '00:00'
+            };
+            
+            newGames.push(newGame);
           }
-
-          newGames.push(newGame);
         }
       }
     });
 
     onGameUpdate([...games, ...newGames]);
+    
     toast({
-      title: "Round Robin Generated",
-      description: `${newGames.length} group stage games created`,
+      title: "Round-robin generated!",
+      description: `Generated ${newGames.length} games with all possible pairings`,
     });
   };
 

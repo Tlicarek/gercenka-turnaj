@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Team, Game, TournamentSettings } from '@/pages/Index';
-import { Plus, Minus, Trophy, Clock, Edit, Trash2 } from 'lucide-react';
+import { Plus, Minus, Trophy, Clock, Edit, Trash2, Play } from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -88,6 +88,11 @@ const ScoreBoard = ({
             title: "Game Complete!",
             description: `${winningTeam.name} wins!`,
           });
+
+          // Auto-start next game on the same field after a delay
+          setTimeout(() => {
+            autoStartNextGame(game.field);
+          }, 3000);
         }
         
         return {
@@ -106,6 +111,49 @@ const ScoreBoard = ({
     
     onGameUpdate(updatedGames);
     checkPhaseProgression(updatedGames);
+  };
+
+  const autoStartNextGame = (field: string) => {
+    const nextGame = games.find(game => 
+      game.field === field && 
+      !game.isComplete && 
+      !game.isRunning
+    );
+
+    if (nextGame) {
+      const updatedGames = games.map(game => {
+        if (game.id === nextGame.id) {
+          return { ...game, isRunning: true };
+        }
+        return game;
+      });
+      
+      onGameUpdate(updatedGames);
+      
+      toast({
+        title: "Next Game Started!",
+        description: `${nextGame.team1.name} vs ${nextGame.team2.name} on ${field}`,
+      });
+    }
+  };
+
+  const startGame = (gameId: string) => {
+    const updatedGames = games.map(game => {
+      if (game.id === gameId) {
+        return { ...game, isRunning: true };
+      }
+      return game;
+    });
+    
+    onGameUpdate(updatedGames);
+    
+    const game = games.find(g => g.id === gameId);
+    if (game) {
+      toast({
+        title: "Game Started!",
+        description: `${game.team1.name} vs ${game.team2.name}`,
+      });
+    }
   };
 
   const updateTeamStats = (winnerTeamId: string, loserTeamId: string, winnerScore: number, loserScore: number, sets: any[]) => {
@@ -473,6 +521,14 @@ const ScoreBoard = ({
                     <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'}`}>{game.field}</CardTitle>
                     <div className="flex gap-1 sm:gap-2">
                       <Badge className="bg-orange-500 text-white text-xs">PENDING</Badge>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => startGame(game.id)}
+                        className={`bg-green-500 hover:bg-green-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
+                      >
+                        <Play size={isMobile ? 12 : 16} />
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,19 +15,33 @@ interface FieldScheduleProps {
 const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
   const [selectedField, setSelectedField] = useState<string>('all');
 
-  const fields = ['Field 1', 'Field 2', 'Field 3', 'Field 4'];
-  const uniqueFields = [...new Set(games.map(g => g.field))];
+  // Get unique fields from actual games data
+  const uniqueFields = [...new Set(games.map(g => g.field))].sort();
+  
+  // If no games exist, show expected fields based on numberOfCourts
+  const expectedFields = Array.from({length: numberOfCourts}, (_, i) => `Court ${i + 1}`);
+  const fieldsToShow = uniqueFields.length > 0 ? uniqueFields : expectedFields;
 
   const getGamesByField = (field: string) => {
     return games
       .filter(g => g.field === field)
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a, b) => {
+        // Sort by status: running first, then pending, then completed
+        if (a.isRunning && !b.isRunning) return -1;
+        if (!a.isRunning && b.isRunning) return 1;
+        if (!a.isComplete && b.isComplete) return -1;
+        if (a.isComplete && !b.isComplete) return 1;
+        return a.team1.name.localeCompare(b.team1.name);
+      });
   };
 
   const getAllGamesSorted = () => {
     return games.sort((a, b) => {
-      const timeCompare = a.time.localeCompare(b.time);
-      if (timeCompare !== 0) return timeCompare;
+      // Sort by status first, then by field
+      if (a.isRunning && !b.isRunning) return -1;
+      if (!a.isRunning && b.isRunning) return 1;
+      if (!a.isComplete && b.isComplete) return -1;
+      if (a.isComplete && !b.isComplete) return 1;
       return a.field.localeCompare(b.field);
     });
   };
@@ -35,14 +50,20 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
     if (game.isComplete) {
       return <CheckCircle className="text-green-500" size={20} />;
     }
-    return <Play className="text-blue-500" size={20} />;
+    if (game.isRunning) {
+      return <Play className="text-blue-500" size={20} />;
+    }
+    return <Clock className="text-orange-500" size={20} />;
   };
 
   const getGameStatusBadge = (game: Game) => {
     if (game.isComplete) {
       return <Badge className="bg-green-100 text-green-800 border-green-300">Completed</Badge>;
     }
-    return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Scheduled</Badge>;
+    if (game.isRunning) {
+      return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Live</Badge>;
+    }
+    return <Badge className="bg-orange-100 text-orange-800 border-orange-300">Pending</Badge>;
   };
 
   const getPhaseColor = (phase: string) => {
@@ -57,15 +78,15 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
 
   const renderGameCard = (game: Game) => (
     <Card key={game.id} className={`bg-white/90 backdrop-blur-sm ${
-      game.isComplete ? 'border-green-200' : 'border-blue-200'
+      game.isComplete ? 'border-green-200' : game.isRunning ? 'border-blue-200' : 'border-orange-200'
     }`}>
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2">
             {getGameStatusIcon(game)}
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Clock size={16} />
-              {game.time}
+              <MapPin size={16} />
+              {game.field}
             </div>
           </div>
           <div className="flex gap-2">
@@ -152,24 +173,26 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
         <Card className="bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200">
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-orange-600">
-              {games.filter(g => !g.isComplete).length}
+              {games.filter(g => !g.isComplete && !g.isRunning).length}
             </div>
-            <div className="text-sm text-gray-600">Remaining</div>
+            <div className="text-sm text-gray-600">Pending</div>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">{uniqueFields.length}</div>
-            <div className="text-sm text-gray-600">Active Fields</div>
+            <div className="text-2xl font-bold text-purple-600">
+              {games.filter(g => g.isRunning).length}
+            </div>
+            <div className="text-sm text-gray-600">Live</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Field Selection */}
       <Tabs value={selectedField} onValueChange={setSelectedField} className="w-full">
-        <TabsList className="grid grid-cols-5 w-full bg-white/80 backdrop-blur-sm">
+        <TabsList className={`grid w-full bg-white/80 backdrop-blur-sm`} style={{gridTemplateColumns: `repeat(${Math.min(fieldsToShow.length + 1, 6)}, 1fr)`}}>
           <TabsTrigger value="all">All Fields</TabsTrigger>
-          {fields.map(field => (
+          {fieldsToShow.slice(0, 5).map(field => (
             <TabsTrigger key={field} value={field}>
               {field}
             </TabsTrigger>
@@ -178,7 +201,7 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
 
         <TabsContent value="all" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {fields.map(field => {
+            {fieldsToShow.map(field => {
               const fieldGames = getGamesByField(field);
               
               return (
@@ -201,11 +224,17 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
                       </div>
                     ) : (
                       fieldGames.map(game => (
-                        <div key={game.id} className="p-3 bg-gray-50 rounded-lg">
+                        <div key={game.id} className={`p-3 rounded-lg ${
+                          game.isRunning ? 'bg-blue-50 border border-blue-200' :
+                          game.isComplete ? 'bg-green-50 border border-green-200' :
+                          'bg-orange-50 border border-orange-200'
+                        }`}>
                           <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-2 text-sm">
-                              <Clock size={14} />
-                              {game.time}
+                              {getGameStatusIcon(game)}
+                              <span className="font-medium">
+                                {game.isRunning ? 'LIVE' : game.isComplete ? 'COMPLETED' : 'PENDING'}
+                              </span>
                             </div>
                             {getGameStatusBadge(game)}
                           </div>
@@ -231,7 +260,7 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
           </div>
         </TabsContent>
 
-        {fields.map(field => (
+        {fieldsToShow.map(field => (
           <TabsContent key={field} value={field} className="space-y-4">
             <Card className="bg-white/90 backdrop-blur-sm">
               <CardHeader>
@@ -246,7 +275,7 @@ const FieldSchedule = ({ games, numberOfCourts }: FieldScheduleProps) => {
                     <div className="col-span-2 text-center text-gray-500 py-12">
                       <MapPin className="mx-auto mb-4 text-gray-300" size={48} />
                       <div className="text-xl">No games scheduled for {field}</div>
-                      <div className="text-sm">Use the Admin Panel to create games</div>
+                      <div className="text-sm">Use the Admin Panel to create games for this field</div>
                     </div>
                   ) : (
                     getGamesByField(field).map(game => renderGameCard(game))

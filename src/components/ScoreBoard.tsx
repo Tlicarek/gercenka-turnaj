@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,12 @@ const ScoreBoard = ({
   const [editTeam1Score, setEditTeam1Score] = useState(0);
   const [editTeam2Score, setEditTeam2Score] = useState(0);
   const [selectedField, setSelectedField] = useState<string>('all');
-  const [updatingScores, setUpdatingScores] = useState<Set<string>>(new Set());
+  
+  // More robust debouncing mechanism
+  const lastUpdateTime = useRef<Map<string, number>>(new Map());
+  const updateTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const DEBOUNCE_DELAY = 500; // Increased to 500ms
+  
   const isMobile = useIsMobile();
 
   // Get unique fields from games
@@ -43,13 +48,31 @@ const ScoreBoard = ({
   const filteredGames = selectedField === 'all' ? games : games.filter(game => game.field === selectedField);
 
   const updateScore = async (gameId: string, team: 'team1' | 'team2', change: number) => {
-    // Prevent multiple simultaneous updates for the same game
-    if (updatingScores.has(gameId)) {
-      console.log('Score update already in progress for game:', gameId);
+    const now = Date.now();
+    const lastUpdate = lastUpdateTime.current.get(gameId) || 0;
+    
+    // Strict debouncing - prevent any updates within the debounce window
+    if (now - lastUpdate < DEBOUNCE_DELAY) {
+      console.log('Update blocked - too soon after last update:', gameId);
       return;
     }
 
-    setUpdatingScores(prev => new Set(prev).add(gameId));
+    // Clear any pending timeout for this game
+    const existingTimeout = updateTimeouts.current.get(gameId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Set the last update time immediately
+    lastUpdateTime.current.set(gameId, now);
+
+    // Set a timeout to allow future updates
+    const timeout = setTimeout(() => {
+      lastUpdateTime.current.delete(gameId);
+      updateTimeouts.current.delete(gameId);
+    }, DEBOUNCE_DELAY);
+    
+    updateTimeouts.current.set(gameId, timeout);
 
     try {
       const game = games.find(g => g.id === gameId);
@@ -155,16 +178,13 @@ const ScoreBoard = ({
         description: "Failed to update score. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      // Remove the game from updating set after a small delay to prevent rapid clicks
-      setTimeout(() => {
-        setUpdatingScores(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(gameId);
-          return newSet;
-        });
-      }, 200);
     }
+  };
+
+  // Check if a game is currently being debounced
+  const isGameDebounced = (gameId: string) => {
+    const lastUpdate = lastUpdateTime.current.get(gameId) || 0;
+    return Date.now() - lastUpdate < DEBOUNCE_DELAY;
   };
 
   const autoStartNextGame = (field: string) => {
@@ -487,7 +507,7 @@ const ScoreBoard = ({
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-4 sm:gap-6`}>
             {runningGames.map(game => {
               const currentSet = game.sets[game.currentSet] || { team1Score: 0, team2Score: 0, isComplete: false };
-              const isUpdating = updatingScores.has(game.id);
+              const isDebounced = isGameDebounced(game.id);
               
               return (
                 <Card key={game.id} className="bg-white/90 backdrop-blur-sm border-2 border-green-400">
@@ -531,7 +551,7 @@ const ScoreBoard = ({
                           size="sm"
                           variant="outline"
                           onClick={() => updateScore(game.id, 'team1', -1)}
-                          disabled={currentSet.team1Score === 0 || isUpdating}
+                          disabled={currentSet.team1Score === 0 || isDebounced}
                           className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
                           <Minus size={isMobile ? 12 : 16} />
@@ -542,8 +562,8 @@ const ScoreBoard = ({
                         <Button
                           size="sm"
                           onClick={() => updateScore(game.id, 'team1', 1)}
-                          disabled={isUpdating}
-                          className={`bg-blue-500 hover:bg-blue-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
+                          disabled={isDebounced}
+                          className={`bg-blue-500 hover:bg-blue-600 ${isMobile ? 'h-7 w-7 p-0' : ''} ${isDebounced ? 'opacity-50' : ''}`}
                         >
                           <Plus size={isMobile ? 12 : 16} />
                         </Button>
@@ -564,7 +584,7 @@ const ScoreBoard = ({
                           size="sm"
                           variant="outline"
                           onClick={() => updateScore(game.id, 'team2', -1)}
-                          disabled={currentSet.team2Score === 0 || isUpdating}
+                          disabled={currentSet.team2Score === 0 || isDebounced}
                           className={isMobile ? 'h-7 w-7 p-0' : ''}
                         >
                           <Minus size={isMobile ? 12 : 16} />
@@ -575,8 +595,8 @@ const ScoreBoard = ({
                         <Button
                           size="sm"
                           onClick={() => updateScore(game.id, 'team2', 1)}
-                          disabled={isUpdating}
-                          className={`bg-orange-500 hover:bg-orange-600 ${isMobile ? 'h-7 w-7 p-0' : ''}`}
+                          disabled={isDebounced}
+                          className={`bg-orange-500 hover:bg-orange-600 ${isMobile ? 'h-7 w-7 p-0' : ''} ${isDebounced ? 'opacity-50' : ''}`}
                         >
                           <Plus size={isMobile ? 12 : 16} />
                         </Button>

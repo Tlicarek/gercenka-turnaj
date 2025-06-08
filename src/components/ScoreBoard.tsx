@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +40,15 @@ const ScoreBoard = ({
 
   // Filter games based on selected field
   const filteredGames = selectedField === 'all' ? games : games.filter(game => game.field === selectedField);
+
+  // Add debugging to understand pending games filtering
+  console.log('All games:', games.length);
+  console.log('Filtered games:', filteredGames.length);
+  console.log('Games status breakdown:', {
+    running: filteredGames.filter(g => g.isRunning).length,
+    completed: filteredGames.filter(g => g.isComplete).length,
+    pending: filteredGames.filter(g => !g.isComplete && !g.isRunning).length
+  });
 
   const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
     const updatedGames = games.map(game => {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +10,7 @@ import GroupStandings from '@/components/GroupStandings';
 import TournamentBracket from '@/components/TournamentBracket';
 import FieldSchedule from '@/components/FieldSchedule';
 import PublicTVMode from '@/components/PublicTVMode';
-import GoogleSheetsIntegration from '@/components/GoogleSheetsIntegration';
-import { Trophy, Users, Calendar, Target, Tv, FileSpreadsheet } from 'lucide-react';
+import { Trophy, Users, Calendar, Target, Tv } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTournamentData } from '@/hooks/useTournamentData';
 
@@ -173,7 +173,7 @@ const Index = () => {
 
         {/* Main Content */}
         <Tabs defaultValue="scoreboard" className="space-y-4 sm:space-y-6">
-          <TabsList className={`${isMobile ? 'grid grid-cols-3 h-auto' : 'grid w-full grid-cols-7'} bg-white/80 backdrop-blur-sm`}>
+          <TabsList className={`${isMobile ? 'grid grid-cols-3 h-auto' : 'grid w-full grid-cols-6'} bg-white/80 backdrop-blur-sm`}>
             <TabsTrigger value="scoreboard" className={isMobile ? 'text-xs p-2' : ''}>
               {isMobile ? 'Scores' : 'Live Scores'}
             </TabsTrigger>
@@ -188,10 +188,6 @@ const Index = () => {
               <>
                 <TabsTrigger value="bracket">Tournament Bracket</TabsTrigger>
                 <TabsTrigger value="schedule">Court Schedule</TabsTrigger>
-                <TabsTrigger value="sheets">
-                  <FileSpreadsheet size={16} className="mr-2" />
-                  Google Sheets
-                </TabsTrigger>
                 <TabsTrigger value="admin">Admin Panel</TabsTrigger>
               </>
             )}
@@ -199,19 +195,11 @@ const Index = () => {
 
           {/* Mobile additional tabs */}
           {isMobile && (
-            <div className="space-y-2">
-              <TabsList className="grid grid-cols-3 bg-white/80 backdrop-blur-sm">
-                <TabsTrigger value="bracket" className="text-xs p-2">Bracket</TabsTrigger>
-                <TabsTrigger value="schedule" className="text-xs p-2">Schedule</TabsTrigger>
-                <TabsTrigger value="sheets" className="text-xs p-2">
-                  <FileSpreadsheet size={14} className="mr-1" />
-                  Sheets
-                </TabsTrigger>
-              </TabsList>
-              <TabsList className="grid grid-cols-1 bg-white/80 backdrop-blur-sm">
-                <TabsTrigger value="admin" className="text-xs p-2">Admin Panel</TabsTrigger>
-              </TabsList>
-            </div>
+            <TabsList className="grid grid-cols-3 bg-white/80 backdrop-blur-sm">
+              <TabsTrigger value="bracket" className="text-xs p-2">Bracket</TabsTrigger>
+              <TabsTrigger value="schedule" className="text-xs p-2">Schedule</TabsTrigger>
+              <TabsTrigger value="admin" className="text-xs p-2">Admin</TabsTrigger>
+            </TabsList>
           )}
 
           <TabsContent value="scoreboard">
@@ -248,13 +236,6 @@ const Index = () => {
 
           <TabsContent value="schedule">
             <FieldSchedule games={games} numberOfCourts={tournamentSettings.numberOfCourts} />
-          </TabsContent>
-
-          <TabsContent value="sheets">
-            <GoogleSheetsIntegration 
-              teams={teams}
-              onTeamUpdate={handleTeamUpdate}
-            />
           </TabsContent>
 
           <TabsContent value="admin">

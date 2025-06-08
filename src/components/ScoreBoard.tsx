@@ -38,9 +38,8 @@ const ScoreBoard = ({
   // Get unique fields from games
   const uniqueFields = [...new Set(games.map(g => g.field))].sort();
 
-  // Filter games based on selected field and current phase
-  const phaseFilteredGames = games.filter(game => game.phase === currentPhase);
-  const filteredGames = selectedField === 'all' ? phaseFilteredGames : phaseFilteredGames.filter(game => game.field === selectedField);
+  // Filter games based on selected field
+  const filteredGames = selectedField === 'all' ? games : games.filter(game => game.field === selectedField);
 
   const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
     const updatedGames = games.map(game => {
@@ -126,8 +125,7 @@ const ScoreBoard = ({
     const nextGame = games.find(game => 
       game.field === field && 
       !game.isComplete && 
-      !game.isRunning &&
-      game.phase === currentPhase
+      !game.isRunning
     );
 
     if (nextGame) {
@@ -425,9 +423,6 @@ const ScoreBoard = ({
               Only games from {selectedField} are shown. This prevents accidental score updates on other fields.
             </div>
           )}
-          <div className={`mt-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-600`}>
-            Showing {filteredGames.length} games for {currentPhase} phase
-          </div>
         </CardContent>
       </Card>
 
@@ -702,8 +697,8 @@ const ScoreBoard = ({
           <CardContent className={`${isMobile ? 'p-6' : 'p-8'} text-center`}>
             <div className={`text-gray-500 ${isMobile ? 'text-base' : 'text-lg'}`}>
               {selectedField === 'all' 
-                ? `No games available for ${currentPhase} phase. Use the Admin Panel to create and start games.`
-                : `No games available for ${selectedField} in ${currentPhase} phase. Select "All Fields" or use the Admin Panel to create games.`
+                ? "No games available. Use the Admin Panel to create and start games."
+                : `No games available for ${selectedField}. Select "All Fields" or use the Admin Panel to create games.`
               }
             </div>
           </CardContent>

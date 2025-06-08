@@ -34,7 +34,9 @@ const PublicTVMode = ({ games, teams, tournamentSettings }: PublicTVModeProps) =
             {runningGames.map(game => (
               <Card key={game.id} className="bg-white/10 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-xl font-bold">{game.team1.name} vs {game.team2.name}</CardTitle>
+                  <CardTitle className="text-xl font-bold">
+                    Game {game.gameNumber}: {game.team1.name} vs {game.team2.name}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between items-center">
@@ -67,7 +69,9 @@ const PublicTVMode = ({ games, teams, tournamentSettings }: PublicTVModeProps) =
             {nextGames.map(game => (
               <Card key={game.id} className="bg-white/10 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-xl font-bold">{game.team1.name} vs {game.team2.name}</CardTitle>
+                  <CardTitle className="text-xl font-bold">
+                    Game {game.gameNumber}: {game.team1.name} vs {game.team2.name}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between items-center">

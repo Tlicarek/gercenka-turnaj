@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -96,11 +97,6 @@ const ScoreBoard = ({
             title: "Game Complete!",
             description: `${winningTeam.name} wins!`,
           });
-
-          // Auto-start next game on the same field after a delay
-          setTimeout(() => {
-            autoStartNextGame(game.field);
-          }, 3000);
         }
         
         return {
@@ -119,30 +115,6 @@ const ScoreBoard = ({
     
     onGameUpdate(updatedGames);
     checkPhaseProgression(updatedGames);
-  };
-
-  const autoStartNextGame = (field: string) => {
-    const nextGame = games.find(game => 
-      game.field === field && 
-      !game.isComplete && 
-      !game.isRunning
-    );
-
-    if (nextGame) {
-      const updatedGames = games.map(game => {
-        if (game.id === nextGame.id) {
-          return { ...game, isRunning: true };
-        }
-        return game;
-      });
-      
-      onGameUpdate(updatedGames);
-      
-      toast({
-        title: "Next Game Started!",
-        description: `${nextGame.team1.name} vs ${nextGame.team2.name} on ${field}`,
-      });
-    }
   };
 
   const startGame = (gameId: string) => {

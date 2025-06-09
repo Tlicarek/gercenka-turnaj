@@ -15,6 +15,7 @@ export type Database = {
           created_at: string
           current_set: number
           field: string
+          game_number: number | null
           group_letter: string | null
           id: string
           is_complete: boolean
@@ -33,6 +34,7 @@ export type Database = {
           created_at?: string
           current_set?: number
           field: string
+          game_number?: number | null
           group_letter?: string | null
           id?: string
           is_complete?: boolean
@@ -51,6 +53,7 @@ export type Database = {
           created_at?: string
           current_set?: number
           field?: string
+          game_number?: number | null
           group_letter?: string | null
           id?: string
           is_complete?: boolean

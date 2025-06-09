@@ -166,8 +166,8 @@ export const useTournamentData = () => {
             setsLost: game.winner.sets_lost,
           } : undefined,
           isRunning: game.is_running,
-          team1Score: game.team1Score,
-          team2Score: game.team2Score,
+          team1Score: game.team1_score,
+          team2Score: game.team2_score,
           time: '00:00'
         };
       });

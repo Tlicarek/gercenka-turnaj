@@ -406,7 +406,7 @@ export const useTournamentData = () => {
     }
   };
 
-  // Smart scheduling algorithm
+  // Smart scheduling algorithm with randomized court assignments
   const generateSmartSchedule = (teams: Team[], settings: TournamentSettings, startingGameNumber: number): Game[] => {
     const games: Game[] = [];
     const courts = Array.from({length: settings.numberOfCourts}, (_, i) => `Court ${i + 1}`);
@@ -436,7 +436,6 @@ export const useTournamentData = () => {
     
     // Schedule games with cooldown logic
     const scheduledMatchups = new Set<string>();
-    let courtIndex = 0;
 
     while (allMatchups.length > 0) {
       let foundValidGame = false;
@@ -455,6 +454,9 @@ export const useTournamentData = () => {
         const team2CanPlay = gameNumber - team2LastGame >= 3 || team2LastGame === 0;
 
         if (team1CanPlay && team2CanPlay) {
+          // Randomly select a court for this game
+          const randomCourtIndex = Math.floor(Math.random() * courts.length);
+          
           // Create the game
           const newGame: Game = {
             id: crypto.randomUUID(),
@@ -468,7 +470,7 @@ export const useTournamentData = () => {
             }],
             currentSet: 0,
             isComplete: false,
-            field: courts[courtIndex % courts.length],
+            field: courts[randomCourtIndex],
             phase: 'group' as const,
             group: matchup.group,
             isRunning: false,
@@ -497,7 +499,6 @@ export const useTournamentData = () => {
           allMatchups.splice(i, 1);
           
           gameNumber++;
-          courtIndex++;
           foundValidGame = true;
           break;
         }
@@ -514,7 +515,7 @@ export const useTournamentData = () => {
       }
     }
 
-    console.log(`Generated ${games.length} games with smart scheduling`);
+    console.log(`Generated ${games.length} games with smart scheduling and randomized courts`);
     return games;
   };
 

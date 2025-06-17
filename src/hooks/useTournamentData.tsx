@@ -303,8 +303,8 @@ export const useTournamentData = () => {
 
       let currentGameNumber = (maxGameData?.[0]?.game_number || 0) + 1;
 
-      // Generate 48 games (3 games per team)
-      const generatedGames = generateFixedGameCount(teams, tournamentSettings, currentGameNumber);
+      // Generate smart scheduled games for all groups
+      const generatedGames = generateSmartSchedule(teams, tournamentSettings, currentGameNumber);
 
       // Save all games to database
       for (const game of generatedGames) {
@@ -339,12 +339,12 @@ export const useTournamentData = () => {
 
       await loadGames();
       toast({
-        title: "Fixed Game Count Generated",
-        description: `Generated exactly ${generatedGames.length} games (3 per team)!`,
+        title: "Smart Schedule Generated",
+        description: `Generated ${generatedGames.length} games with optimal team rest periods!`,
       });
       return true;
     } catch (error) {
-      console.error('Error generating games:', error);
+      console.error('Error generating round-robin games:', error);
       return false;
     }
   };
@@ -406,114 +406,115 @@ export const useTournamentData = () => {
     }
   };
 
-  // Generate exactly 3 games per team (48 total games)
-  const generateFixedGameCount = (teams: Team[], settings: TournamentSettings, startingGameNumber: number): Game[] => {
+  // Smart scheduling algorithm
+  const generateSmartSchedule = (teams: Team[], settings: TournamentSettings, startingGameNumber: number): Game[] => {
     const games: Game[] = [];
     const courts = Array.from({length: settings.numberOfCourts}, (_, i) => `Court ${i + 1}`);
     let gameNumber = startingGameNumber;
+
+    // Get all possible matchups for each group
+    const allMatchups: Array<{team1: Team, team2: Team, group: string}> = [];
     
-    // Track how many games each team has played
-    const teamGameCount = new Map<string, number>();
-    teams.forEach(team => teamGameCount.set(team.id, 0));
-    
+    for (let i = 0; i < settings.numberOfGroups; i++) {
+      const groupLetter = String.fromCharCode(65 + i);
+      const groupTeams = teams.filter(team => team.group === groupLetter);
+      
+      // Generate all possible pairings for this group
+      for (let j = 0; j < groupTeams.length; j++) {
+        for (let k = j + 1; k < groupTeams.length; k++) {
+          allMatchups.push({
+            team1: groupTeams[j],
+            team2: groupTeams[k],
+            group: groupLetter
+          });
+        }
+      }
+    }
+
     // Track when each team last played (game number)
     const teamLastPlayed = new Map<string, number>();
     
-    const gamesPerTeam = 3;
-    const totalGamesNeeded = teams.length * gamesPerTeam / 2; // Each game involves 2 teams
-    
-    // Generate games until we reach the target
-    while (games.length < totalGamesNeeded) {
+    // Schedule games with cooldown logic
+    const scheduledMatchups = new Set<string>();
+    let courtIndex = 0;
+
+    while (allMatchups.length > 0) {
       let foundValidGame = false;
-      
-      // Get teams that still need games, prioritizing those with fewer games
-      const availableTeams = teams
-        .filter(team => (teamGameCount.get(team.id) || 0) < gamesPerTeam)
-        .sort((a, b) => (teamGameCount.get(a.id) || 0) - (teamGameCount.get(b.id) || 0));
-      
-      if (availableTeams.length < 2) break;
-      
-      // Try to find a valid matchup
-      for (let i = 0; i < availableTeams.length && !foundValidGame; i++) {
-        for (let j = i + 1; j < availableTeams.length && !foundValidGame; j++) {
-          const team1 = availableTeams[i];
-          const team2 = availableTeams[j];
-          
-          // Check if both teams can play (haven't played recently or it's their first game)
-          const team1LastGame = teamLastPlayed.get(team1.id) || 0;
-          const team2LastGame = teamLastPlayed.get(team2.id) || 0;
-          const team1CanPlay = gameNumber - team1LastGame >= 2 || team1LastGame === 0;
-          const team2CanPlay = gameNumber - team2LastGame >= 2 || team2LastGame === 0;
-          
-          if (team1CanPlay && team2CanPlay) {
-            // Randomly select a court
-            const randomCourtIndex = Math.floor(Math.random() * courts.length);
-            
-            // Create the game
-            const newGame: Game = {
-              id: crypto.randomUUID(),
-              gameNumber: gameNumber,
-              team1: team1,
-              team2: team2,
-              sets: [{
-                team1Score: 0,
-                team2Score: 0,
-                isComplete: false
-              }],
-              currentSet: 0,
-              isComplete: false,
-              field: courts[randomCourtIndex],
-              phase: 'group' as const,
-              group: team1.group, // Assign to team1's group
-              isRunning: false,
+
+      for (let i = 0; i < allMatchups.length; i++) {
+        const matchup = allMatchups[i];
+        const matchupKey = `${matchup.team1.id}-${matchup.team2.id}`;
+        
+        if (scheduledMatchups.has(matchupKey)) continue;
+
+        const team1LastGame = teamLastPlayed.get(matchup.team1.id) || 0;
+        const team2LastGame = teamLastPlayed.get(matchup.team2.id) || 0;
+        
+        // Check if both teams have had enough rest (2 games cooldown)
+        const team1CanPlay = gameNumber - team1LastGame >= 3 || team1LastGame === 0;
+        const team2CanPlay = gameNumber - team2LastGame >= 3 || team2LastGame === 0;
+
+        if (team1CanPlay && team2CanPlay) {
+          // Create the game
+          const newGame: Game = {
+            id: crypto.randomUUID(),
+            gameNumber: gameNumber,
+            team1: matchup.team1,
+            team2: matchup.team2,
+            sets: [{
               team1Score: 0,
               team2Score: 0,
-              time: '00:00'
-            };
+              isComplete: false
+            }],
+            currentSet: 0,
+            isComplete: false,
+            field: courts[courtIndex % courts.length],
+            phase: 'group' as const,
+            group: matchup.group,
+            isRunning: false,
+            team1Score: 0,
+            team2Score: 0,
+            time: '00:00'
+          };
 
-            if (settings.winCondition === 'sets') {
-              newGame.sets = Array(settings.numberOfSets).fill(null).map(() => ({
-                team1Score: 0,
-                team2Score: 0,
-                isComplete: false
-              }));
-            }
-
-            games.push(newGame);
-            
-            // Update game counts and last played times
-            teamGameCount.set(team1.id, (teamGameCount.get(team1.id) || 0) + 1);
-            teamGameCount.set(team2.id, (teamGameCount.get(team2.id) || 0) + 1);
-            teamLastPlayed.set(team1.id, gameNumber);
-            teamLastPlayed.set(team2.id, gameNumber);
-            
-            gameNumber++;
-            foundValidGame = true;
+          if (settings.winCondition === 'sets') {
+            newGame.sets = Array(settings.numberOfSets).fill(null).map(() => ({
+              team1Score: 0,
+              team2Score: 0,
+              isComplete: false
+            }));
           }
+
+          games.push(newGame);
+          scheduledMatchups.add(matchupKey);
+          scheduledMatchups.add(`${matchup.team2.id}-${matchup.team1.id}`); // Also mark reverse
+        
+          // Update when teams last played
+          teamLastPlayed.set(matchup.team1.id, gameNumber);
+          teamLastPlayed.set(matchup.team2.id, gameNumber);
+
+          // Remove this matchup from the list
+          allMatchups.splice(i, 1);
+          
+          gameNumber++;
+          courtIndex++;
+          foundValidGame = true;
+          break;
         }
       }
-      
-      // If no valid game found, advance game number to allow teams to rest
+
+      // If no valid game found, we need to advance game number to allow teams to rest
       if (!foundValidGame) {
         gameNumber++;
-        // Prevent infinite loop
-        if (gameNumber > startingGameNumber + 200) {
-          console.warn('Breaking out of game generation to prevent infinite loop');
+        // Prevent infinite loop by breaking if we've tried too many times
+        if (gameNumber > startingGameNumber + allMatchups.length * 5) {
+          console.warn('Breaking out of scheduling loop to prevent infinite iteration');
           break;
         }
       }
     }
-    
-    console.log(`Generated ${games.length} games with fixed count (3 per team)`);
-    
-    // Log game distribution per team for verification
-    const distribution = new Map<string, number>();
-    games.forEach(game => {
-      distribution.set(game.team1.name, (distribution.get(game.team1.name) || 0) + 1);
-      distribution.set(game.team2.name, (distribution.get(game.team2.name) || 0) + 1);
-    });
-    console.log('Games per team:', Object.fromEntries(distribution));
-    
+
+    console.log(`Generated ${games.length} games with smart scheduling`);
     return games;
   };
 

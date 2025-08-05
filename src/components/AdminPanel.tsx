@@ -24,7 +24,6 @@ interface AdminPanelProps {
   currentPhase: 'group' | 'quarterfinal' | 'semifinal' | 'final';
   onPhaseChange: (phase: 'group' | 'quarterfinal' | 'semifinal' | 'final') => void;
   generateRoundRobinGames: () => Promise<boolean>;
-  deleteTeam: (teamId: string) => Promise<boolean>;
 }
 
 const AdminPanel = ({
@@ -39,8 +38,7 @@ const AdminPanel = ({
   onResetTournament,
   currentPhase,
   onPhaseChange,
-  generateRoundRobinGames,
-  deleteTeam
+  generateRoundRobinGames
 }: AdminPanelProps) => {
   const [password, setPassword] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
@@ -149,6 +147,54 @@ const AdminPanel = ({
     toast({
       title: "Team Removed",
       description: "Team and associated games have been removed",
+    });
+  };
+
+  const generateRoundRobin = () => {
+    const newGames: Game[] = [];
+    const groups = getGroupNames();
+    const courts = getCourtNames();
+
+    groups.forEach(group => {
+      const groupTeams = teams.filter(team => team.group === group);
+      
+      // Generate all possible pairings (including reverse matchups)
+      for (let i = 0; i < groupTeams.length; i++) {
+        for (let j = 0; j < groupTeams.length; j++) {
+          if (i !== j) { // Don't match a team against itself
+            const courtIndex = newGames.length % courts.length;
+            
+            const newGame: Game = {
+              id: generateUUID(),
+              team1: groupTeams[i],
+              team2: groupTeams[j],
+              sets: [{
+                team1Score: 0,
+                team2Score: 0,
+                isComplete: false
+              }],
+              currentSet: 0,
+              isComplete: false,
+              field: courts[courtIndex],
+              phase: 'group' as const,
+              group: group,
+              isRunning: false,
+              team1Score: 0,
+              team2Score: 0,
+              time: '00:00'
+            };
+            
+            newGames.push(newGame);
+          }
+        }
+      }
+    });
+
+    onGameUpdate([...games, ...newGames]);
+    
+    toast({
+      title: "Round-robin generated!",
+      description: `Generated ${newGames.length} games with all possible pairings`,
     });
   };
 
@@ -414,13 +460,9 @@ const AdminPanel = ({
 
     const courts = getCourtNames();
     const courtIndex = games.length % courts.length;
-    
-    // Get the next game number
-    const maxGameNumber = Math.max(0, ...games.map(g => g.gameNumber || 0));
 
     const newGame: Game = {
       id: generateUUID(),
-      gameNumber: maxGameNumber + 1,
       team1,
       team2,
       sets: [{
@@ -452,7 +494,7 @@ const AdminPanel = ({
     
     toast({
       title: "Game Added",
-      description: `Game ${newGame.gameNumber}: ${team1.name} vs ${team2.name} has been scheduled`,
+      description: `${team1.name} vs ${team2.name} has been scheduled`,
     });
   };
 
@@ -640,9 +682,7 @@ const AdminPanel = ({
                 {runningGames.map(game => (
                   <div key={game.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                     <div>
-                      <div className="font-medium">
-                        Game {game.gameNumber}: {game.team1.name} vs {game.team2.name}
-                      </div>
+                      <div className="font-medium">{game.team1.name} vs {game.team2.name}</div>
                       <div className="text-sm text-gray-600">{game.field}</div>
                     </div>
                     <Button
@@ -673,9 +713,7 @@ const AdminPanel = ({
                 {pendingGames.slice(0, 5).map(game => (
                   <div key={game.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
                     <div>
-                      <div className="font-medium">
-                        Game {game.gameNumber}: {game.team1.name} vs {game.team2.name}
-                      </div>
+                      <div className="font-medium">{game.team1.name} vs {game.team2.name}</div>
                       <div className="text-sm text-gray-600">{game.field}</div>
                     </div>
                     <Button
@@ -701,11 +739,11 @@ const AdminPanel = ({
         <CardContent>
           <div className="flex gap-4 flex-wrap">
             <Button 
-              onClick={generateRoundRobinGames} 
+              onClick={generateRoundRobin} 
               className="bg-purple-500 hover:bg-purple-600"
               disabled={teams.length < 2}
             >
-              Generate Smart Schedule
+              Generate Round Robin
             </Button>
             
             <Button 

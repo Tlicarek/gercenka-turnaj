@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +12,7 @@ interface PublicTVModeProps {
 
 const PublicTVMode = ({ games, teams, tournamentSettings }: PublicTVModeProps) => {
   const runningGames = games.filter(g => g.isRunning);
-  // Fix: Exclude both completed AND running games from "Next Up"
-  const nextGames = games.filter(g => !g.isComplete && !g.isRunning).slice(0, 3);
+  const nextGames = games.filter(g => !g.isComplete).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 text-white p-8">
@@ -34,9 +32,7 @@ const PublicTVMode = ({ games, teams, tournamentSettings }: PublicTVModeProps) =
             {runningGames.map(game => (
               <Card key={game.id} className="bg-white/10 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-xl font-bold">
-                    Game {game.gameNumber}: {game.team1.name} vs {game.team2.name}
-                  </CardTitle>
+                  <CardTitle className="text-xl font-bold">{game.team1.name} vs {game.team2.name}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between items-center">
@@ -69,9 +65,7 @@ const PublicTVMode = ({ games, teams, tournamentSettings }: PublicTVModeProps) =
             {nextGames.map(game => (
               <Card key={game.id} className="bg-white/10 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-xl font-bold">
-                    Game {game.gameNumber}: {game.team1.name} vs {game.team2.name}
-                  </CardTitle>
+                  <CardTitle className="text-xl font-bold">{game.team1.name} vs {game.team2.name}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between items-center">

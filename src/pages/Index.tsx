@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ export interface GameSet {
 
 export interface Game {
   id: string;
-  gameNumber?: number; // Added game numbering
   team1: Team;
   team2: Team;
   sets: GameSet[];
@@ -252,7 +252,6 @@ const Index = () => {
               currentPhase={currentPhase}
               onPhaseChange={setCurrentPhase}
               generateRoundRobinGames={generateRoundRobinGames}
-              deleteTeam={deleteTeam}
             />
           </TabsContent>
         </Tabs>

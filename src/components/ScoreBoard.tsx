@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,19 +35,6 @@ const ScoreBoard = ({
   const [editTeam2Score, setEditTeam2Score] = useState(0);
   const [selectedField, setSelectedField] = useState<string>('all');
   const isMobile = useIsMobile();
-  
-  // For handling rapid score updates
-  const pendingUpdatesRef = useRef<Map<string, { team: 'team1' | 'team2', totalChange: number }>>(new Map());
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Get unique fields from games
   const uniqueFields = [...new Set(games.map(g => g.field))].sort();
@@ -54,125 +42,79 @@ const ScoreBoard = ({
   // Filter games based on selected field
   const filteredGames = selectedField === 'all' ? games : games.filter(game => game.field === selectedField);
 
-  // Add debugging to understand pending games filtering
-  console.log('All games:', games.length);
-  console.log('Filtered games:', filteredGames.length);
-  console.log('Games status breakdown:', {
-    running: filteredGames.filter(g => g.isRunning).length,
-    completed: filteredGames.filter(g => g.isComplete).length,
-    pending: filteredGames.filter(g => !g.isComplete && !g.isRunning).length
-  });
-
-  const processPendingUpdates = () => {
-    const updates = Array.from(pendingUpdatesRef.current.entries());
-    if (updates.length === 0) return;
-
-    // Clear pending updates
-    pendingUpdatesRef.current.clear();
-
-    // Apply all accumulated changes to the most recent game state
+  const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
     const updatedGames = games.map(game => {
-      const pendingUpdate = updates.find(([gameKey]) => gameKey.split('-')[0] === game.id);
-      if (!pendingUpdate || game.isComplete || !game.isRunning) return game;
+      if (game.id === gameId && !game.isComplete && game.isRunning) {
+        const currentSet = game.sets[game.currentSet];
+        if (!currentSet || currentSet.isComplete) return game;
 
-      const [gameKey, updateData] = pendingUpdate;
-      const [gameId, team] = gameKey.split('-') as [string, 'team1' | 'team2'];
-      
-      const currentSet = game.sets[game.currentSet];
-      if (!currentSet || currentSet.isComplete) return game;
+        const newScore = Math.max(0, currentSet[`${team}Score`] + change);
+        const otherTeamScore = team === 'team1' ? currentSet.team2Score : currentSet.team1Score;
+        
+        let isSetComplete = false;
+        let isGameComplete = false;
+        let newCurrentSet = game.currentSet;
 
-      const newScore = Math.max(0, currentSet[`${team}Score`] + updateData.totalChange);
-      const otherTeamScore = team === 'team1' ? currentSet.team2Score : currentSet.team1Score;
-      
-      let isSetComplete = false;
-      let isGameComplete = false;
-      let newCurrentSet = game.currentSet;
-
-      // Check win conditions
-      if (tournamentSettings.winCondition === 'points') {
-        isSetComplete = newScore >= tournamentSettings.pointsToWin;
-      } else if (tournamentSettings.winCondition === 'sets') {
-        isSetComplete = newScore >= tournamentSettings.pointsToWinSet || (newScore >= 15 && Math.abs(newScore - otherTeamScore) >= 2);
-      }
-
-      const updatedSets = game.sets.map((set, index) => {
-        if (index === game.currentSet) {
-          return {
-            ...set,
-            [`${team}Score`]: newScore,
-            isComplete: isSetComplete
-          };
+        // Check win conditions
+        if (tournamentSettings.winCondition === 'points') {
+          isSetComplete = newScore >= tournamentSettings.pointsToWin;
+        } else if (tournamentSettings.winCondition === 'sets') {
+          isSetComplete = newScore >= tournamentSettings.pointsToWinSet || (newScore >= 15 && Math.abs(newScore - otherTeamScore) >= 2);
         }
-        return set;
-      });
 
-      // Check if we need to start a new set or complete the game
-      if (isSetComplete && tournamentSettings.winCondition === 'sets') {
-        const team1SetsWon = updatedSets.filter(set => set.isComplete && set.team1Score > set.team2Score).length;
-        const team2SetsWon = updatedSets.filter(set => set.isComplete && set.team2Score > set.team1Score).length;
-        
-        if (team1SetsWon >= tournamentSettings.setsToWin || team2SetsWon >= tournamentSettings.setsToWin) {
-          isGameComplete = true;
-        } else if (newCurrentSet + 1 < tournamentSettings.numberOfSets) {
-          newCurrentSet = newCurrentSet + 1;
-        }
-      } else if (isSetComplete && tournamentSettings.winCondition === 'points') {
-        isGameComplete = true;
-      }
-
-      if (isGameComplete) {
-        const winningTeam = team === 'team1' ? game.team1 : game.team2;
-        const losingTeam = team === 'team1' ? game.team2 : game.team1;
-        
-        updateTeamStats(winningTeam.id, losingTeam.id, newScore, otherTeamScore, updatedSets);
-        
-        toast({
-          title: "Game Complete!",
-          description: `${winningTeam.name} wins!`,
+        const updatedSets = game.sets.map((set, index) => {
+          if (index === game.currentSet) {
+            return {
+              ...set,
+              [`${team}Score`]: newScore,
+              isComplete: isSetComplete
+            };
+          }
+          return set;
         });
+
+        // Check if we need to start a new set or complete the game
+        if (isSetComplete && tournamentSettings.winCondition === 'sets') {
+          const team1SetsWon = updatedSets.filter(set => set.isComplete && set.team1Score > set.team2Score).length;
+          const team2SetsWon = updatedSets.filter(set => set.isComplete && set.team2Score > set.team1Score).length;
+          
+          if (team1SetsWon >= tournamentSettings.setsToWin || team2SetsWon >= tournamentSettings.setsToWin) {
+            isGameComplete = true;
+          } else if (newCurrentSet + 1 < tournamentSettings.numberOfSets) {
+            newCurrentSet = newCurrentSet + 1;
+          }
+        } else if (isSetComplete && tournamentSettings.winCondition === 'points') {
+          isGameComplete = true;
+        }
+
+        if (isGameComplete) {
+          const winningTeam = team === 'team1' ? game.team1 : game.team2;
+          const losingTeam = team === 'team1' ? game.team2 : game.team1;
+          
+          updateTeamStats(winningTeam.id, losingTeam.id, newScore, otherTeamScore, updatedSets);
+          
+          toast({
+            title: "Game Complete!",
+            description: `${winningTeam.name} wins!`,
+          });
+        }
+        
+        return {
+          ...game,
+          sets: updatedSets,
+          currentSet: newCurrentSet,
+          isComplete: isGameComplete,
+          isRunning: isGameComplete ? false : game.isRunning,
+          winner: isGameComplete ? (team === 'team1' ? game.team1 : game.team2) : undefined,
+          team1Score: updatedSets[0]?.team1Score || 0,
+          team2Score: updatedSets[0]?.team2Score || 0
+        };
       }
-      
-      return {
-        ...game,
-        sets: updatedSets,
-        currentSet: newCurrentSet,
-        isComplete: isGameComplete,
-        isRunning: isGameComplete ? false : game.isRunning,
-        winner: isGameComplete ? (team === 'team1' ? game.team1 : game.team2) : undefined,
-        team1Score: updatedSets[0]?.team1Score || 0,
-        team2Score: updatedSets[0]?.team2Score || 0
-      };
+      return game;
     });
     
     onGameUpdate(updatedGames);
     checkPhaseProgression(updatedGames);
-  };
-
-  const updateScore = (gameId: string, team: 'team1' | 'team2', change: number) => {
-    // Accumulate the change for this game and team
-    const updateKey = `${gameId}-${team}`;
-    const existingUpdate = pendingUpdatesRef.current.get(updateKey);
-    
-    if (existingUpdate) {
-      pendingUpdatesRef.current.set(updateKey, {
-        ...existingUpdate,
-        totalChange: existingUpdate.totalChange + change
-      });
-    } else {
-      pendingUpdatesRef.current.set(updateKey, {
-        team,
-        totalChange: change
-      });
-    }
-
-    // Clear any existing timeout and set a new one
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-    }
-    
-    updateTimeoutRef.current = setTimeout(() => {
-      processPendingUpdates();
-    }, 50); // 50ms batch window
   };
 
   const startGame = (gameId: string) => {

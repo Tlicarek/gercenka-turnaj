@@ -358,11 +358,28 @@ export const useTournamentData = () => {
 
       if (error) {
         console.error('Error deleting team:', error);
+        toast({
+          title: "Error deleting team",
+          description: error.message,
+          variant: "destructive",
+        });
         return false;
       }
+      
+      // Refresh teams after successful deletion
+      await loadTeams();
+      toast({
+        title: "Team deleted",
+        description: "Team has been successfully deleted!",
+      });
       return true;
     } catch (error) {
       console.error('Error deleting team:', error);
+      toast({
+        title: "Error deleting team",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
       return false;
     }
   };

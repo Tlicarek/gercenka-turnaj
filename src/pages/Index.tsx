@@ -252,6 +252,7 @@ const Index = () => {
               currentPhase={currentPhase}
               onPhaseChange={setCurrentPhase}
               generateRoundRobinGames={generateRoundRobinGames}
+              deleteTeam={deleteTeam}
             />
           </TabsContent>
         </Tabs>

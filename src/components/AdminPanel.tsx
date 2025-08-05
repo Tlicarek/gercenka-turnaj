@@ -24,6 +24,7 @@ interface AdminPanelProps {
   currentPhase: 'group' | 'quarterfinal' | 'semifinal' | 'final';
   onPhaseChange: (phase: 'group' | 'quarterfinal' | 'semifinal' | 'final') => void;
   generateRoundRobinGames: () => Promise<boolean>;
+  deleteTeam: (teamId: string) => Promise<boolean>;
 }
 
 const AdminPanel = ({
@@ -38,7 +39,8 @@ const AdminPanel = ({
   onResetTournament,
   currentPhase,
   onPhaseChange,
-  generateRoundRobinGames
+  generateRoundRobinGames,
+  deleteTeam
 }: AdminPanelProps) => {
   const [password, setPassword] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
@@ -48,6 +50,8 @@ const AdminPanel = ({
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editTeamName, setEditTeamName] = useState('');
   const [editTeamGroup, setEditTeamGroup] = useState('');
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const generateUUID = () => {
     return crypto.randomUUID();
@@ -135,19 +139,42 @@ const AdminPanel = ({
     });
   };
 
-  const removeTeam = (teamId: string) => {
-    const updatedTeams = teams.filter(team => team.id !== teamId);
-    onTeamUpdate(updatedTeams);
+  const handleDeleteTeam = async (teamId: string) => {
+    if (isDeleting) return; // Prevent multiple clicks
     
-    const updatedGames = games.filter(game => 
-      game.team1.id !== teamId && game.team2.id !== teamId
-    );
-    onGameUpdate(updatedGames);
+    setIsDeleting(teamId);
+    try {
+      const success = await deleteTeam(teamId);
+      if (!success) {
+        // Error is already handled in deleteTeam function
+        return;
+      }
+    } catch (error) {
+      toast({
+        title: "Error deleting team",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  const handleGenerateGames = async () => {
+    if (isGenerating) return; // Prevent multiple clicks
     
-    toast({
-      title: "Team Removed",
-      description: "Team and associated games have been removed",
-    });
+    setIsGenerating(true);
+    try {
+      await generateRoundRobinGames();
+    } catch (error) {
+      toast({
+        title: "Error generating games",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const resetAllGroups = () => {
@@ -561,9 +588,10 @@ const AdminPanel = ({
                       <Edit size={14} />
                     </Button>
                     <Button
-                      onClick={() => removeTeam(team.id)}
+                      onClick={() => handleDeleteTeam(team.id)}
                       size="sm"
                       variant="destructive"
+                      disabled={isDeleting === team.id}
                     >
                       <Trash2 size={14} />
                     </Button>
@@ -699,11 +727,11 @@ const AdminPanel = ({
         <CardContent>
           <div className="flex gap-4 flex-wrap">
             <Button 
-              onClick={generateRoundRobinGames} 
+              onClick={handleGenerateGames} 
               className="bg-purple-500 hover:bg-purple-600"
-              disabled={teams.length < 2}
+              disabled={teams.length < 2 || isGenerating}
             >
-              Generate Smart Schedule
+              {isGenerating ? "Generating..." : "Generate Smart Schedule"}
             </Button>
             
             <Button 
